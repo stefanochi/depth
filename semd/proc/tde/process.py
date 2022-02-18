@@ -67,12 +67,7 @@ class PyTdeModelFloat(PyLoihiProcessModel):
         self.u[:] = self.u * (1 - self.du)
         a = a_in_data > np.zeros(t_in_data.shape)
         self.u[a] = a_in_data[a]
-        #m = a_in_data
-        # bias = self.bias * (2**self.bias_exp)
-        # self.v[:] = self.v * (1 - self.dv) + self.u + bias
-        # s_out = np.logical_and(self.v >= self.vth, self.trig)
-        # self.v[s_out] = 0  # Reset voltage to 0
 
-        self.s_out.send(t_in_data * self.u)
         f = t_in_data > np.zeros(t_in_data.shape)
+        self.s_out.send(f.astype(int) * self.u)
         self.u[f] = 0

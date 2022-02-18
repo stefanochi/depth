@@ -1,0 +1,82 @@
+from lava.magma.core.process.process import AbstractProcess
+from lava.magma.core.process.variable import Var
+from lava.magma.core.process.ports.ports import InPort, OutPort
+
+import numpy as np
+from lava.magma.core.sync.protocols.loihi_protocol import LoihiProtocol
+from lava.magma.core.model.py.ports import PyInPort, PyOutPort
+from lava.magma.core.model.py.type import LavaPyType
+from lava.magma.core.resources import CPU
+from lava.magma.core.decorator import implements, requires, tag
+from lava.magma.core.model.py.model import PyLoihiProcessModel
+
+class TDE2D(AbstractProcess):
+    """Time difference encoder
+    """
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        shape = kwargs.get("shape", (1,))
+        du = kwargs.pop("du", 0)
+        dv = kwargs.pop("dv", 0)
+        bias = kwargs.pop("bias", 0)
+        bias_exp = kwargs.pop("bias_exp", 0)
+        vth = kwargs.pop("vth", 10)
+        uth = kwargs.pop("uth", 10)
+        trig = kwargs.pop("trig", 0)
+
+        self.shape = shape
+        self.a_in = InPort(shape=shape)
+        self.s_out = OutPort(shape=shape)
+        self.u = Var(shape=shape, init=0)
+        self.v = Var(shape=shape, init=0)
+        self.du = Var(shape=(1,), init=du)
+        self.dv = Var(shape=(1,), init=dv)
+        self.bias = Var(shape=shape, init=bias)
+        self.bias_exp = Var(shape=shape, init=bias_exp)
+        self.vth = Var(shape=(1,), init=vth)
+        self.uth = Var(shape=(1,), init=uth)
+
+        self.t_in = InPort(shape=shape)
+        self.trig = Var(shape=shape, init=trig)
+
+@implements(proc=TDE2D, protocol=LoihiProtocol)
+@requires(CPU)
+@tag('floating_pt')
+class PyTde2dModelFloat(PyLoihiProcessModel):
+    """Implementation of Leaky-Integrate-and-Fire neural process in floating
+    point precision. This short and simple ProcessModel can be used for quick
+    algorithmic prototyping, without engaging with the nuances of a fixed
+    point implementation.
+    """
+    a_in: PyInPort = LavaPyType(PyInPort.VEC_DENSE, float)
+    s_out: PyOutPort = LavaPyType(PyOutPort.VEC_DENSE, float, precision=1)
+    u: np.ndarray = LavaPyType(np.ndarray, float)
+    v: np.ndarray = LavaPyType(np.ndarray, float)
+    bias: np.ndarray = LavaPyType(np.ndarray, float)
+    bias_exp: np.ndarray = LavaPyType(np.ndarray, float)
+    du: float = LavaPyType(float, float)
+    dv: float = LavaPyType(float, float)
+    vth: float = LavaPyType(float, float)
+    uth: float = LavaPyType(float, float)
+
+    t_in: PyInPort = LavaPyType(PyInPort.VEC_DENSE, bool, precision=1)
+    trig: bool = LavaPyType(bool, bool)
+
+    def run_spk(self):
+        # trigger input
+        t_in_data = self.t_in.recv()
+        # activation input
+        a_in_data = self.a_in.recv()
+        # current decay
+        self.u[:] = self.u * (1 - self.du)
+        # add current input
+        self.u[:] += a_in_data
+
+        #a = a_in_data > np.zeros(a_in_data.shape)
+
+        self.v[:] = self.v * (1 - self.dv)
+        self.v[self.u >= self.uth] = self.vth
+
+        f = t_in_data > np.zeros(t_in_data.shape)
+        self.s_out.send(f.astype(int) * self.v)
+        self.v[f] = 0

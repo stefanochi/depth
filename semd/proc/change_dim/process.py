@@ -18,6 +18,7 @@ class ChangeDim(AbstractProcess):
         shape = kwargs.get("shape", (1,))
         col_del = np.array(kwargs.get("col_del", []))
         row_del = np.array(kwargs.get("row_del", []))
+        weight = kwargs.get("weight", 1)
 
         self.out_shape = (shape[0] - len(row_del), (shape[1] - len(col_del)))
 
@@ -25,6 +26,7 @@ class ChangeDim(AbstractProcess):
         self.s_out = OutPort(shape=self.out_shape)
         self.col_del = Var(shape=col_del.shape, init=col_del)
         self.row_del = Var(shape=row_del.shape, init=row_del)
+        self.weight = Var(shape=(1,), init=weight)
 
 
 
@@ -36,6 +38,7 @@ class PyChangeDimModelFloat(PyLoihiProcessModel):
     s_out: PyOutPort = LavaPyType(PyOutPort.VEC_DENSE, float, precision=1)
     row_del: np.ndarray = LavaPyType(np.ndarray, int)
     col_del: np.ndarray = LavaPyType(np.ndarray, int)
+    weight: np.ndarray = LavaPyType(np.ndarray, float)
 
     def run_spk(self):
         s_in_data = self.s_in.recv()
@@ -43,4 +46,4 @@ class PyChangeDimModelFloat(PyLoihiProcessModel):
         s_in_data = np.delete(s_in_data, self.row_del, 0)
         s_in_data = np.delete(s_in_data, self.col_del, 1)
 
-        self.s_out.send(s_in_data)
+        self.s_out.send(s_in_data * self.weight)
