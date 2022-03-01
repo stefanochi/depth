@@ -48,7 +48,7 @@ class PyTdeModelFloat(PyLoihiProcessModel):
     """
     a_in: PyInPort = LavaPyType(PyInPort.VEC_DENSE, float)
     s_out: PyOutPort = LavaPyType(PyOutPort.VEC_DENSE, float, precision=1)
-    u: np.ndarray = LavaPyType(np.ndarray, float)
+    u: np.ndarray = LavaPyType(np.ndarray, float, precision=0.1)
     v: np.ndarray = LavaPyType(np.ndarray, float)
     bias: np.ndarray = LavaPyType(np.ndarray, float)
     bias_exp: np.ndarray = LavaPyType(np.ndarray, float)
@@ -65,9 +65,9 @@ class PyTdeModelFloat(PyLoihiProcessModel):
 
         a_in_data = self.a_in.recv() * 10
         self.u[:] = self.u * (1 - self.du)
-        a = a_in_data > np.zeros(t_in_data.shape)
+        a = np.logical_and(a_in_data > np.zeros(t_in_data.shape), self.u[:] == np.zeros(self.u.shape))
         self.u[a] = a_in_data[a]
 
         f = t_in_data > np.zeros(t_in_data.shape)
         self.s_out.send(f.astype(int) * self.u)
-        self.u[f] = 0
+        #self.u[f] = 0
