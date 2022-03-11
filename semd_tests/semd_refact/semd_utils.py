@@ -33,6 +33,9 @@ def filter_patch(events, patch_center, patch_size):
     return events_filtered
 
 def gen_input_data(events, shape, timesteps):
+    """
+    Generate the data for the RingBuffer from the stream of events
+    """
     t_start = events[0, 0]
     duration = events[-1, 0] - events[0, 0]
     
@@ -54,20 +57,21 @@ def run_sim(args, events, data_steps, sim_steps):
     conv_stride = args["conv_stride"]
     conv_shape = args["conv_shape"]
     
-#     out_shape = (int(shape[0] / conv_stride[0]), int(shape[1] / conv_stride[1]))
-#     detector_shape = (out_shape[0], out_shape[1] - 1)
-    
+    # depends on the network
     semd = SemdLayer(**args)
     
     out_shape = semd.out_shape
     detector_shape = semd.detector_shape
-
+    
+    # generate input data 
     input_data = gen_input_data(events, shape, data_steps)
+    # create RingBuffer with input data
     input_n = RingBuffer(input_data)
-
-    output_n = SinkBuffer(shape=detector_shape, buffer=sim_steps)
-
+    # connect RingBuffer to network
     input_n.s_out.connect(semd.s_in)
+    
+    output_n = SinkBuffer(shape=detector_shape, buffer=sim_steps)
+    
     semd.s_out.connect(output_n.a_in)
 
     rcfg = Loihi1SimCfg(select_tag='floating_pt', select_sub_proc_model=True)
