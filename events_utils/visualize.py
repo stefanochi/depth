@@ -47,12 +47,15 @@ def time_surface(events, img_shape, polarity=0, filter_polarity=True):
 
     return img
 
-def _image2pointcloud(d):
+def _image2pointcloud(d, v_range=None):
     points = []
     for x in range(d.shape[1]):
         for y in range(d.shape[0]):
             if d.mask[y, x]:
                 continue
+            if v_range != None:
+                if v_range[0] > d.data[y, x] or d.data[y, x] > v_range[1]:
+                    continue
             points.append([x, y, d.data[y, x]])
     return np.array(points)
 
@@ -85,7 +88,7 @@ def _set_axes_equal(ax):
     ax.set_zlim3d([z_middle - plot_radius, z_middle + plot_radius])
 
 def visualize3d(depth_map, s=10, range=None):
-    points = _image2pointcloud(depth_map)
+    points = _image2pointcloud(depth_map, range)
 
     points = np.array(points)
     fig = plt.figure(figsize=(10, 10))
