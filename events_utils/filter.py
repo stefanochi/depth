@@ -22,6 +22,38 @@ def filter_conv(events, shape, factor=5, thresh=1.0/3.0):
     event_conv = np.array(event_conv)
     return event_conv, result_shape
 
+def filter_conv2(events, shape, factor=5, thresh=1.0/3.0):
+    conv_shape = (factor, factor)
+    conv_stride = (1, 1)
+    result_shape = (int(shape[0] / conv_stride[0]), int(shape[1] / conv_stride[1]))
+    conv_acc = np.zeros(result_shape)
+    event_conv = []
+    hf = int(factor / 2)
+    print(hf)
+    print(conv_shape[0] * conv_shape[1] * thresh)
+    for e in events:
+        # if e[3] != 1:
+        #     continue
+
+        x = int(e[1] / conv_stride[0])
+        y = int(e[2] / conv_stride[1])
+
+
+        for xi in range(-hf, hf+1):
+            for yi in range(-hf, hf+1):
+                if y + yi < 0 or y+yi>=result_shape[1]:
+                    continue
+                if x + xi < 0 or x + xi >= result_shape[0]:
+                    continue
+                conv_acc[y+yi, x+xi] += 1 if e[3] == 1 else -1
+
+                if np.abs(conv_acc[y, x]) > conv_shape[0] * conv_shape[1] * thresh:
+                    event_conv.append([e[0], x+xi, y+yi, e[3]])
+                    conv_acc[y+yi, x+xi] = 0
+
+    event_conv = np.array(event_conv)
+    return event_conv, result_shape
+
 def filter_time(events, t_start, t_end):
     id_start = np.searchsorted(events[:,0], t_start)
     id_end = np.searchsorted(events[:,0], t_end)

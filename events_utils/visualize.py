@@ -20,7 +20,7 @@ def events2img(events, img_shape, polarity=0, filter_polarity=True):
 
 def events2time_surf(events, img_shape, polarity=0, filter_polarity=True):
     img = np.zeros(img_shape)
-
+    start_time = events[0, 0]
     for e in events:
         if filter_polarity and e[3] != polarity:
             continue
@@ -28,7 +28,7 @@ def events2time_surf(events, img_shape, polarity=0, filter_polarity=True):
         x = int(e[1])
         y = int(e[2])
 
-        img[y, x] = e[0]
+        img[y, x] = e[0] - start_time
 
     return img
 

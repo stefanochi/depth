@@ -93,8 +93,8 @@ class TimeDifference2d:
             last_time[y, x] = e[0]
             event_sign[y, x] = e[3]
 
-            if e[0] < start_time + start_delay:
-                continue
+            # if e[0] < start_time + start_delay:
+            #     continue
 
             u_td = (e[0] - last_time[y - dist, x]
                     if y - dist >= 0 and last_time[y - dist, x] != -1.0 and event_sign[y - dist, x] == e[3]
@@ -118,7 +118,8 @@ class TimeDifference2d:
             if u_td <= 0.0:
                 if d_td <= 0.0:
                     v_td = 0.0
-                    continue
+                    discarded_ind += 1
+                    # continue
                 else:
                     v_td = d_td
             else:
@@ -126,14 +127,15 @@ class TimeDifference2d:
                     #v_td = d_td if d_td >= u_td else -u_td
                     v_td = 0.0
                     discarded_ind += 1
-                    continue
+                    # continue
                 else:
                     v_td = -u_td
 
             if r_td <= 0.0:
                 if l_td <= 0.0:
                     h_td = 0.0
-                    continue
+                    discarded_ind += 1
+                    # continue
                 else:
                     h_td = l_td
             else:
@@ -141,7 +143,7 @@ class TimeDifference2d:
                     #h_td = l_td if l_td >= r_td else -r_td
                     h_td = 0.0
                     discarded_ind += 1
-                    continue
+                    # continue
                 else:
                     h_td = -r_td
 
@@ -165,9 +167,9 @@ class TimeDifference2d:
             ofs[y, x] = of
             time_difference = of / dist
 
-            if time_difference < 0.0005 or np.isclose(time_difference, 0.0):
-                discarded_neg += 1
-                continue
+            # if time_difference < 0.0005 or np.isclose(time_difference, 0.0):
+            #     discarded_neg += 1
+            #     continue
 
             #time_difference = td_p[np.digitize(time_difference, td_p) - 1]
 
@@ -287,3 +289,143 @@ class TimeDifference2d:
         print(vel)
 
         return vel
+
+
+def measure_td(events, shape, px_range_pred=5, dist=1, start_delay=0.1):
+    last_time = np.full(shape, -1.0)
+    event_sign = np.full(shape, -1)
+
+    U = np.zeros(shape)
+    V = np.zeros(shape)
+
+    U_pred = {}
+    V_pred = {}
+
+    start_time = events[0, 0]
+
+    for e in tqdm(events):
+        x = int(e[1])
+        y = int(e[2])
+
+        #         if e[3] != 1:
+        #             continue
+
+        last_sign = event_sign[y, x]
+        last_time[y, x] = e[0]
+        event_sign[y, x] = e[3]
+
+        if e[0] < start_time + start_delay:
+            continue
+
+        u_td = (e[0] - last_time[y - dist, x]
+                if y - dist >= 0 and last_time[y - dist, x] != -1.0 and event_sign[y - dist, x] == e[3]
+                else -1.0)
+        d_td = (e[0] - last_time[y + dist, x]
+                if y + dist < shape[0] and last_time[y + dist, x] != -1.0 and event_sign[y + dist, x] == e[3]
+                else -1.0)
+        r_td = (e[0] - last_time[y, x + dist]
+                if x + dist < shape[1] and last_time[y, x + dist] != -1.0 and event_sign[y, x + dist] == e[3]
+                else -1.0)
+        l_td = (e[0] - last_time[y, x - dist]
+                if x - dist >= 0 and last_time[y, x - dist] != -1.0 and event_sign[y, x - dist] == e[3]
+                else -1.0)
+
+        if u_td <= 0.0:
+            if d_td <= 0.0:
+                v_td = 0.0
+            #                 continue
+            else:
+                v_td = d_td
+        else:
+            if d_td > 0:
+                v_td = d_td if d_td <= u_td else -u_td
+            #                 v_td = 0.0
+                continue
+            else:
+                v_td = -u_td
+
+        if r_td <= 0.0:
+            if l_td <= 0.0:
+                h_td = 0.0
+            #                 continue
+            else:
+                h_td = l_td
+        else:
+            if l_td > 0:
+                h_td = l_td if l_td <= r_td else -r_td
+            #                 h_td = 0.0
+                continue
+            else:
+                h_td = -r_td
+
+        # if np.abs(v_td) < 0.005:
+        #     v_td = 0.0
+        # if np.abs(h_td) < 0.005:
+        #     h_td = 0.0
+
+        u = h_td if h_td != 0.0 else 0.0
+        v = v_td if v_td != 0.0 else 0.0
+
+        n = 20
+
+        if (y, x) in U_pred:
+            U_mean = np.mean(np.array(U_pred[y, x]))
+            U_std = np.std(np.array(U_pred[y, x]))
+            U_len = len(U_pred[y, x])
+
+            if np.abs(u - U_mean) > 0.01:
+                continue
+
+            if U_len >= n:
+                U[y, x] = U_mean
+                # u = 0.0
+            else:
+                U[y, x] = u
+        else:
+            U[y, x] = u
+
+        if (y, x) in V_pred:
+            V_mean = np.mean(np.array(V_pred[y, x]))
+            V_std = np.std(np.array(V_pred[y, x]))
+            V_len = len(V_pred[y, x])
+
+            if np.abs(v - V_mean) > 0.01:
+                continue
+
+            if V_len >= n:
+                V[y, x] = V_mean
+                # v = 0.0
+            else:
+                V[y, x] = v
+        else:
+            V[y, x] = v
+
+        if np.abs(U[y, x]) < 0.001:
+            U[y, x] = 0.0
+        if np.abs(V[y, x]) < 0.001:
+            V[y, x] = 0.0
+
+        U[y, x] =dist / U[y, x] if U[y, x] != 0.0 else 0.0
+        V[y, x] =dist / V[y, x] if V[y, x] != 0.0 else 0.0
+
+        for i in range(-int(px_range_pred / 2), int(px_range_pred / 2)):
+            for k in range(-int(px_range_pred / 2), int(px_range_pred / 2)):
+
+                x_p = x + i
+                y_p = y + k
+
+                if x_p < 0 or x_p >= shape[1] or y_p < 0 or y_p >= shape[0]:
+                    continue
+
+                if (y_p, x_p) in U_pred:
+                    U_pred[y_p, x_p].append(u)
+                else:
+                    U_pred[y_p, x_p] = [u]
+
+                #send pred
+                if (y_p, x_p) in V_pred:
+                    V_pred[y_p, x_p].append(v)
+                else:
+                    V_pred[y_p, x_p] = [v]
+
+    return U, V
