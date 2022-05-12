@@ -116,7 +116,7 @@ def median_filter(img, dist):
         for y in range(img.shape[0]):
             if img.mask[y, x]:
                 continue
-            area = img[y-dist:y+dist+1,x-dist:x+dist+1].filled(0)
+            area = img[y-dist:y+dist+1,x-dist:x+dist+1].compressed()
             l = []
             for a in area.flatten():
                 if a == 0:

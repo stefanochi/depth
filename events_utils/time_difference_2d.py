@@ -363,18 +363,18 @@ def measure_td(events, shape, px_range_pred=5, dist=1, start_delay=0.1):
         # if np.abs(h_td) < 0.005:
         #     h_td = 0.0
 
-        u = h_td if h_td != 0.0 else 0.0
-        v = v_td if v_td != 0.0 else 0.0
+        u = h_td / dist if h_td != 0.0 else 0.0
+        v = v_td / dist if v_td != 0.0 else 0.0
 
-        n = 20
+        n = 10
 
         if (y, x) in U_pred:
             U_mean = np.mean(np.array(U_pred[y, x]))
             U_std = np.std(np.array(U_pred[y, x]))
             U_len = len(U_pred[y, x])
 
-            if np.abs(u - U_mean) > 0.01:
-                continue
+            # if np.abs(u - U_mean) > 0.01:
+            #     continue
 
             if U_len >= n:
                 U[y, x] = U_mean
@@ -389,8 +389,8 @@ def measure_td(events, shape, px_range_pred=5, dist=1, start_delay=0.1):
             V_std = np.std(np.array(V_pred[y, x]))
             V_len = len(V_pred[y, x])
 
-            if np.abs(v - V_mean) > 0.01:
-                continue
+            # if np.abs(v - V_mean) > 0.01:
+            #     continue
 
             if V_len >= n:
                 V[y, x] = V_mean
@@ -400,13 +400,9 @@ def measure_td(events, shape, px_range_pred=5, dist=1, start_delay=0.1):
         else:
             V[y, x] = v
 
-        if np.abs(U[y, x]) < 0.001:
-            U[y, x] = 0.0
-        if np.abs(V[y, x]) < 0.001:
-            V[y, x] = 0.0
 
-        U[y, x] =dist / U[y, x] if U[y, x] != 0.0 else 0.0
-        V[y, x] =dist / V[y, x] if V[y, x] != 0.0 else 0.0
+        U[y, x] = U[y, x] if U[y, x] != 0.0 else 0.0
+        V[y, x] = V[y, x] if V[y, x] != 0.0 else 0.0
 
         for i in range(-int(px_range_pred / 2), int(px_range_pred / 2)):
             for k in range(-int(px_range_pred / 2), int(px_range_pred / 2)):

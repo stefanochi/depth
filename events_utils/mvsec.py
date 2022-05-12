@@ -85,11 +85,11 @@ def load_odom(f):
     odom[:, 1:4] = data['lin_vel']
     odom[:, 4:] = data['ang_vel']
 
-    odom[:, 1] = np.convolve(odom[:, 1], np.ones(10), mode="same")
-    odom[:, 2] = np.convolve(odom[:, 2], np.ones(10), mode="same")
-    odom[:, 3] = np.convolve(odom[:, 3], np.ones(10), mode="same")
-    odom[:, 4] = np.convolve(odom[:, 4], np.ones(10), mode="same")
-    odom[:, 5] = np.convolve(odom[:, 5], np.ones(10), mode="same")
-    odom[:, 6] = np.convolve(odom[:, 6], np.ones(10), mode="same")
+    # odom[:, 1] = np.convolve(odom[:, 1], np.ones(10), mode="same")
+    # odom[:, 2] = np.convolve(odom[:, 2], np.ones(10), mode="same")
+    # odom[:, 3] = np.convolve(odom[:, 3], np.ones(10), mode="same")
+    # odom[:, 4] = np.convolve(odom[:, 4], np.ones(10), mode="same")
+    # odom[:, 5] = np.convolve(odom[:, 5], np.ones(10), mode="same")
+    # odom[:, 6] = np.convolve(odom[:, 6], np.ones(10), mode="same")
 
     return odom
