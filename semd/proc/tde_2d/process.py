@@ -10,73 +10,108 @@ from lava.magma.core.resources import CPU
 from lava.magma.core.decorator import implements, requires, tag
 from lava.magma.core.model.py.model import PyLoihiProcessModel
 
+
 class TDE2D(AbstractProcess):
-    """Time difference encoder
+    """Time difference encoder for the 2D version.
+    It receives 4 inputs, one for each xy direction.
+    Plus one more input when the center pixels receives an event.
     """
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         shape = kwargs.get("shape", (1,))
-        du = kwargs.pop("du", 0)
-        dv = kwargs.pop("dv", 0)
-        bias = kwargs.pop("bias", 0)
-        bias_exp = kwargs.pop("bias_exp", 0)
-        vth = kwargs.pop("vth", 10)
-        uth = kwargs.pop("uth", 10)
-        trig = kwargs.pop("trig", 0)
 
         self.shape = shape
-        self.a_in = InPort(shape=shape)
-        self.s_out = OutPort(shape=shape)
-        self.u = Var(shape=shape, init=0)
-        self.v = Var(shape=shape, init=0)
-        self.du = Var(shape=(1,), init=du)
-        self.dv = Var(shape=(1,), init=dv)
-        self.bias = Var(shape=shape, init=bias)
-        self.bias_exp = Var(shape=shape, init=bias_exp)
-        self.vth = Var(shape=(1,), init=vth)
-        self.uth = Var(shape=(1,), init=uth)
+        # variables that hold the counter for
+        # horizontal and vertical motion
+        self.h_td = Var(shape=shape, init=np.zeros(shape))
+        self.v_td = Var(shape=shape, init=np.zeros(shape))
+        # record the sign of the events arriving
+        self.h_sign = Var(shape=shape, init=np.zeros(shape))
+        self.v_sign = Var(shape=shape, init=np.zeros(shape))
 
-        self.t_in = InPort(shape=shape)
-        self.trig = Var(shape=shape, init=trig)
+        self.up_in = InPort(shape=shape)
+        self.down_in = InPort(shape=shape)
+        self.left_in = InPort(shape=shape)
+        self.right_in = InPort(shape=shape)
+
+        self.trig_in = InPort(shape=shape)
+
+        self.u_out = OutPort(shape=shape)
+        self.v_out = OutPort(shape=shape)
+        self.d_out = OutPort(shape=shape)
+
 
 @implements(proc=TDE2D, protocol=LoihiProtocol)
 @requires(CPU)
 @tag('floating_pt')
 class PyTde2dModelFloat(PyLoihiProcessModel):
-    """Implementation of Leaky-Integrate-and-Fire neural process in floating
-    point precision. This short and simple ProcessModel can be used for quick
-    algorithmic prototyping, without engaging with the nuances of a fixed
-    point implementation.
     """
-    a_in: PyInPort = LavaPyType(PyInPort.VEC_DENSE, float)
-    s_out: PyOutPort = LavaPyType(PyOutPort.VEC_DENSE, float, precision=1)
-    u: np.ndarray = LavaPyType(np.ndarray, float)
-    v: np.ndarray = LavaPyType(np.ndarray, float)
-    bias: np.ndarray = LavaPyType(np.ndarray, float)
-    bias_exp: np.ndarray = LavaPyType(np.ndarray, float)
-    du: float = LavaPyType(float, float)
-    dv: float = LavaPyType(float, float)
-    vth: float = LavaPyType(float, float)
-    uth: float = LavaPyType(float, float)
+    """
+    up_in: PyInPort = LavaPyType(PyInPort.VEC_DENSE, float)
+    down_in: PyInPort = LavaPyType(PyInPort.VEC_DENSE, float)
+    left_in: PyInPort = LavaPyType(PyInPort.VEC_DENSE, float)
+    right_in: PyInPort = LavaPyType(PyInPort.VEC_DENSE, float)
 
-    t_in: PyInPort = LavaPyType(PyInPort.VEC_DENSE, bool, precision=1)
-    trig: bool = LavaPyType(bool, bool)
+    h_td: np.ndarray = LavaPyType(np.ndarray, float)
+    v_td: np.ndarray = LavaPyType(np.ndarray, float)
+    h_sign: np.ndarray = LavaPyType(np.ndarray, float)
+    v_sign: np.ndarray = LavaPyType(np.ndarray, float)
+
+    trig_in: PyInPort = LavaPyType(PyInPort.VEC_DENSE, float)
+
+    u_out: PyOutPort = LavaPyType(PyOutPort.VEC_DENSE, float)
+    v_out: PyOutPort = LavaPyType(PyOutPort.VEC_DENSE, float)
+    d_out: PyOutPort = LavaPyType(PyOutPort.VEC_DENSE, float)
 
     def run_spk(self):
-        # trigger input
-        t_in_data = self.t_in.recv()
-        # activation input
-        a_in_data = self.a_in.recv()
-        # current decay
-        self.u[:] = self.u * (1 - self.du)
-        # add current input
-        self.u[:] += a_in_data
+        # input from each direction
+        up_in_data = self.up_in.recv()
+        down_in_data = self.down_in.recv()
+        left_in_data = self.left_in.recv()
+        right_in_data = self.right_in.recv()
 
-        #a = a_in_data > np.zeros(a_in_data.shape)
+        # input from the trigger pixel
+        trig_in_data = self.trig_in.recv()
 
-        self.v[:] = self.v * (1 - self.dv)
-        self.v[self.u >= self.uth] = self.vth
+        # if the trigger arrives, reset the counter and output the time
+        # difference measured.
+        m = (trig_in_data == self.h_sign) * (self.h_sign != 0.0)
+        h_td_out = self.h_td * m
+        self.h_td[m] = 0.0
+        m = (trig_in_data == self.v_sign) * (self.v_sign != 0.0)
+        v_td_out = self.v_td * m
+        self.v_td[m] = 0.0
 
-        f = t_in_data > np.zeros(t_in_data.shape)
-        self.s_out.send(f.astype(int) * self.v)
-        self.v[f] = 0
+        # increase each counter if it is more than zero
+        # if td is zeros, no input was received and the counter
+        # does not need to be increased
+        self.v_td[self.v_td > 0] += 1
+        self.v_td[self.v_td < 0] -= 1
+
+        self.h_td[self.h_td > 0] += 1
+        self.h_td[self.h_td < 0] -= 1
+
+        # TODO what happens when both input directions fire a the same time?
+        # store the polarity of the event that starts the counter
+        self.v_sign = self.v_sign * (up_in_data == 0) + (up_in_data * (trig_in_data == 0.0))
+        self.v_sign = self.v_sign * (down_in_data == 0) + (down_in_data * (trig_in_data == 0.0))
+        self.h_sign = self.h_sign * (right_in_data == 0) + (right_in_data * (trig_in_data == 0.0))
+        self.h_sign = self.h_sign * (left_in_data == 0) + (left_in_data * (trig_in_data == 0.0))
+        # start the counter if one of the input arrives,
+        # but ignore the input if the corresponding counter is already active
+        # If a trigger arrived in the same timestep, the counter is not started
+        self.v_td = self.v_td * (up_in_data == 0.0) + (np.abs(up_in_data) * (trig_in_data == 0.0))
+        self.v_td = self.v_td * (down_in_data == 0.0) - (np.abs(down_in_data) * (trig_in_data == 0.0))
+        self.h_td = self.h_td * (right_in_data == 0.0) + (np.abs(right_in_data) * (trig_in_data == 0.0))
+        self.h_td = self.h_td * (left_in_data == 0.0) - (np.abs(left_in_data) * (trig_in_data == 0.0))
+
+        # send the output spikes
+        # for now as two difference variable TODO change
+
+        self.u_out.send(h_td_out)
+        self.v_out.send(v_td_out)
+
+        d = h_td_out * 0.002 * (-103) + v_td_out * 0.002 * (0)
+        d *= d > 0.0
+        self.d_out.send(d)

@@ -1,5 +1,34 @@
 import numpy as np
 
+
+def get_connection_conv(shape, kernel_size):
+    n_elems = shape[0] * shape[1]
+
+
+def get_connection_left(shape):
+    n_elems = shape[0] * shape[1]
+    d = np.ones(n_elems - 1)
+    d[shape[0] - 1::shape[0]] = 0
+    conn = np.diag(d, 1)
+    return conn
+
+def get_connection_right(shape):
+    n_elems = shape[0] * shape[1]
+    d = np.ones(n_elems - 1)
+    d[shape[0] - 1::shape[0]] = 0
+    conn = np.diag(d, -1)
+    return conn
+
+def get_connection_down(shape):
+    d = np.ones(shape[0] * (shape[1] - 1))
+    conn = np.diag(d, -shape[0])
+    return conn
+
+def get_connection_up(shape):
+    d = np.ones(shape[0] * (shape[1] - 1))
+    conn = np.diag(d, shape[0])
+    return conn
+
 def calc_patch_size(input_shape, dis_x, dis_y):
     """
     This method returns the dimension of the patch, when measuring the time between pixel with the specified distance

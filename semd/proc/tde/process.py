@@ -10,32 +10,24 @@ from lava.magma.core.resources import CPU
 from lava.magma.core.decorator import implements, requires, tag
 from lava.magma.core.model.py.model import PyLoihiProcessModel
 
+
 class TDE(AbstractProcess):
     """Time difference encoder
     """
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         shape = kwargs.get("shape", (1,))
-        du = kwargs.pop("du", 0)
-        dv = kwargs.pop("dv", 0)
-        bias = kwargs.pop("bias", 0)
-        bias_exp = kwargs.pop("bias_exp", 0)
-        vth = kwargs.pop("vth", 10)
         trig = kwargs.pop("trig", 0)
 
         self.shape = shape
         self.a_in = InPort(shape=shape)
-        self.s_out = OutPort(shape=shape)
-        self.u = Var(shape=shape, init=0)
-        self.v = Var(shape=shape, init=0)
-        self.du = Var(shape=(1,), init=du)
-        self.dv = Var(shape=(1,), init=dv)
-        self.bias = Var(shape=shape, init=bias)
-        self.bias_exp = Var(shape=shape, init=bias_exp)
-        self.vth = Var(shape=(1,), init=vth)
-
         self.t_in = InPort(shape=shape)
-        self.trig = Var(shape=shape, init=trig)
+        self.s_out = OutPort(shape=shape)
+
+        self.counter = Var(shape=shape)
+        self.sign = Var(shape=shape)
+
 
 @implements(proc=TDE, protocol=LoihiProtocol)
 @requires(CPU)
@@ -47,27 +39,30 @@ class PyTdeModelFloat(PyLoihiProcessModel):
     point implementation.
     """
     a_in: PyInPort = LavaPyType(PyInPort.VEC_DENSE, float)
-    s_out: PyOutPort = LavaPyType(PyOutPort.VEC_DENSE, float, precision=1)
-    u: np.ndarray = LavaPyType(np.ndarray, float, precision=0.1)
-    v: np.ndarray = LavaPyType(np.ndarray, float)
-    bias: np.ndarray = LavaPyType(np.ndarray, float)
-    bias_exp: np.ndarray = LavaPyType(np.ndarray, float)
-    du: float = LavaPyType(float, float)
-    dv: float = LavaPyType(float, float)
-    vth: float = LavaPyType(float, float)
+    s_out: PyOutPort = LavaPyType(PyOutPort.VEC_DENSE, float)
+    t_in: PyInPort = LavaPyType(PyInPort.VEC_DENSE, float, precision=2)
 
-    t_in: PyInPort = LavaPyType(PyInPort.VEC_DENSE, bool, precision=1)
-    trig: bool = LavaPyType(bool, bool)
+    counter: np.ndarray = LavaPyType(np.ndarray, float)
+    sign: np.ndarray = LavaPyType(np.ndarray, int)
 
     def run_spk(self):
-        t_in_data = self.t_in.recv()
-        #self.trig = np.logical_or(t_in_data, self.trig)
+        trig_in_data = self.t_in.recv()
+        a_in_data = self.a_in.recv()
 
-        a_in_data = self.a_in.recv() * 10
-        self.u[:] = self.u * (1 - self.du)
-        a = np.logical_and(a_in_data > np.zeros(t_in_data.shape), self.u[:] == np.zeros(self.u.shape))
-        self.u[a] = a_in_data[a]
+        # check if trigger is received
+        m = (np.sign(trig_in_data) == self.sign) * (self.h_sign != 0)
+        s_out_data = self.counter * m
+        # reset the counter
+        self.counter[m] = 0.0
 
-        f = t_in_data > np.zeros(t_in_data.shape)
-        self.s_out.send(f.astype(int) * self.u)
-        #self.u[f] = 0
+        # increase the counters that are started
+        self.couter[self.counter > 0] += 1
+
+        # if a new spike arrives (a_in) start the counter (or restart) and store the sign
+        # If a trigger arrived in the same timestep, the counter is not started
+        m = np.logical_and(np.sign(a_in_data) != 0, np.sign(trig_in_data) == 0)
+        self.sign[m] = np.sign(a_in_data[m])
+        # start the counter
+        self.counter[m] = 1.0
+
+        self.s_out.send(s_out_data)
