@@ -38,6 +38,8 @@ class Semd2dLayer(AbstractProcess):
         conv_stride = kwargs.pop("conv_stride", (1, 1))
         thresh_conv = kwargs.pop("thresh_conv", 0.5)
         vth = kwargs.pop("vth", 10)
+        tu = kwargs.get("tu", (1,))
+        tv = kwargs.get("tv", (1,))
 
         bias_weight = vth / conv_shape[0] * conv_shape[1] * thresh_conv
         # convolution layer with reshape proc
@@ -66,6 +68,8 @@ class Semd2dLayerModel(AbstractSubProcessModel):
         conv_stride = proc.init_args.get("conv_stride", (1, 1))
         thresh_conv = proc.init_args.get("thresh_conv", 0.5)
         vth = proc.init_args.get("vth", 0.9)
+        tu = proc.init_args.get("tu", (1,))
+        tv = proc.init_args.get("tv", (1,))
 
         bias_weight = (1.0 / (conv_shape[0] * conv_shape[1])) / thresh_conv
         # convolution layer with reshape proc
@@ -86,7 +90,7 @@ class Semd2dLayerModel(AbstractSubProcessModel):
         # conv to lif
         self.conv.s_out.connect(self.lif.a_in)
 
-        self.td = TDE2D(shape=out_shape)
+        self.td = TDE2D(shape=out_shape, tu=tu, tv=tv)
 
         # removes columns and row from the lif to match the dimension of the time difference detector
         # TODO change
@@ -120,7 +124,7 @@ class Semd2dLayerModel(AbstractSubProcessModel):
 
         self.dense_trig.a_out.reshape(out_shape).connect(self.td.trig_in)
 
-        self.average_layer = AverageLayer(shape=out_shape, mean_thr=0.5)
+        self.average_layer = AverageLayer(shape=out_shape, mean_thr=100)
 
         self.dense_avg = Dense(shape=conn_shape, weights=np.eye(conn_shape[0]), use_graded_spike=True)
 
@@ -129,7 +133,7 @@ class Semd2dLayerModel(AbstractSubProcessModel):
 
         # use convolution to connect the average layer
         # connect(self.average_layer.s_out, self.average_layer.s_in, ops=[Convolution(np.full((5, 5), 1.0))])
-        conv = Convolution(np.full((5, 5), 1.0))
+        conv = Convolution(np.full((7, 7), 1.0))
         conv.configure(out_shape)
         conv_weights = conv._compute_weights() - np.eye(n_elems)
         self.conv_dense = Dense(shape=conn_shape, weights=conv_weights, use_graded_spike=True)
@@ -152,6 +156,6 @@ class Semd2dLayerModel(AbstractSubProcessModel):
 
         self.td.u_out.connect(proc.out_ports.u_out)
         self.td.v_out.connect(proc.out_ports.v_out)
-        self.lif.s_out.connect(proc.out_ports.d_out)
+        self.td.d_out.connect(proc.out_ports.d_out)
 
         # proc.vars.u.alias(self.detector.vars.u)

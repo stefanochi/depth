@@ -1,6 +1,6 @@
 import numpy as np
 
-def filter_conv(events, shape, factor=5, thresh=1.0/3.0):
+def filter_conv(events, shape, factor=5, thresh=1.0/2.0):
     conv_shape = (factor, factor)
     conv_stride = (factor, factor)
     result_shape = (int(shape[0] / conv_stride[0]), int(shape[1] / conv_stride[1]))
@@ -29,7 +29,7 @@ def filter_conv2(events, shape, factor=5, thresh=1.0/3.0):
     conv_acc = np.zeros(result_shape)
     event_conv = []
     hf = int(factor / 2)
-    print(hf)
+    print(result_shape)
     print(conv_shape[0] * conv_shape[1] * thresh)
     for e in events:
         # if e[3] != 1:
@@ -41,9 +41,9 @@ def filter_conv2(events, shape, factor=5, thresh=1.0/3.0):
 
         for xi in range(-hf, hf+1):
             for yi in range(-hf, hf+1):
-                if y + yi < 0 or y+yi>=result_shape[1]:
+                if y + yi < 0 or (y+yi)>=result_shape[0]:
                     continue
-                if x + xi < 0 or x + xi >= result_shape[0]:
+                if x + xi < 0 or x + xi >= result_shape[1]:
                     continue
                 conv_acc[y+yi, x+xi] += 1 if e[3] == 1 else -1
 

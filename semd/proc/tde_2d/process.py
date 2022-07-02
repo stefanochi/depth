@@ -9,7 +9,10 @@ from lava.magma.core.model.py.type import LavaPyType
 from lava.magma.core.resources import CPU
 from lava.magma.core.decorator import implements, requires, tag
 from lava.magma.core.model.py.model import PyLoihiProcessModel
+from lava.magma.core.model.sub.model import AbstractSubProcessModel
 
+from semd.proc.tde.process import TDE
+from semd.proc.extract_flow.process import ExtractFlow
 
 class TDE2D(AbstractProcess):
     """Time difference encoder for the 2D version.
@@ -20,15 +23,10 @@ class TDE2D(AbstractProcess):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         shape = kwargs.get("shape", (1,))
+        tu = kwargs.get("tu", (1,))
+        tv = kwargs.get("tv", (1,))
 
         self.shape = shape
-        # variables that hold the counter for
-        # horizontal and vertical motion
-        self.h_td = Var(shape=shape, init=np.zeros(shape))
-        self.v_td = Var(shape=shape, init=np.zeros(shape))
-        # record the sign of the events arriving
-        self.h_sign = Var(shape=shape, init=np.zeros(shape))
-        self.v_sign = Var(shape=shape, init=np.zeros(shape))
 
         self.up_in = InPort(shape=shape)
         self.down_in = InPort(shape=shape)
@@ -41,77 +39,43 @@ class TDE2D(AbstractProcess):
         self.v_out = OutPort(shape=shape)
         self.d_out = OutPort(shape=shape)
 
+        self.t_u = Var(shape=(1,), init=tu)
+        self.t_v = Var(shape=(1,), init=tv)
+
 
 @implements(proc=TDE2D, protocol=LoihiProtocol)
 @requires(CPU)
 @tag('floating_pt')
-class PyTde2dModelFloat(PyLoihiProcessModel):
+class PyTde2dModelFloat(AbstractSubProcessModel):
     """
     """
-    up_in: PyInPort = LavaPyType(PyInPort.VEC_DENSE, float)
-    down_in: PyInPort = LavaPyType(PyInPort.VEC_DENSE, float)
-    left_in: PyInPort = LavaPyType(PyInPort.VEC_DENSE, float)
-    right_in: PyInPort = LavaPyType(PyInPort.VEC_DENSE, float)
+    def __init__(self, proc):
+        shape = proc.init_args.get("shape", (1,))
+        tu = proc.init_args.get("tu", (1, ))
+        tv = proc.init_args.get("tv", (1, ))
 
-    h_td: np.ndarray = LavaPyType(np.ndarray, float)
-    v_td: np.ndarray = LavaPyType(np.ndarray, float)
-    h_sign: np.ndarray = LavaPyType(np.ndarray, float)
-    v_sign: np.ndarray = LavaPyType(np.ndarray, float)
+        self.up_tde = TDE(shape=shape)
+        self.down_tde = TDE(shape=shape)
+        self.right_tde = TDE(shape=shape)
+        self.left_tde = TDE(shape=shape)
 
-    trig_in: PyInPort = LavaPyType(PyInPort.VEC_DENSE, float)
+        proc.in_ports.up_in.connect(self.up_tde.a_in)
+        proc.in_ports.down_in.connect(self.down_tde.a_in)
+        proc.in_ports.right_in.connect(self.right_tde.a_in)
+        proc.in_ports.left_in.connect(self.left_tde.a_in)
 
-    u_out: PyOutPort = LavaPyType(PyOutPort.VEC_DENSE, float)
-    v_out: PyOutPort = LavaPyType(PyOutPort.VEC_DENSE, float)
-    d_out: PyOutPort = LavaPyType(PyOutPort.VEC_DENSE, float)
+        proc.in_ports.trig_in.connect(self.up_tde.t_in)
+        proc.in_ports.trig_in.connect(self.down_tde.t_in)
+        proc.in_ports.trig_in.connect(self.right_tde.t_in)
+        proc.in_ports.trig_in.connect(self.left_tde.t_in)
 
-    def run_spk(self):
-        # input from each direction
-        up_in_data = self.up_in.recv()
-        down_in_data = self.down_in.recv()
-        left_in_data = self.left_in.recv()
-        right_in_data = self.right_in.recv()
+        self.flow = ExtractFlow(shape=shape, tu=tu, tv=tv)
 
-        # input from the trigger pixel
-        trig_in_data = self.trig_in.recv()
+        self.up_tde.s_out.connect(self.flow.up_in)
+        self.down_tde.s_out.connect(self.flow.down_in)
+        self.right_tde.s_out.connect(self.flow.right_in)
+        self.left_tde.s_out.connect(self.flow.left_in)
 
-        # if the trigger arrives, reset the counter and output the time
-        # difference measured.
-        m = (trig_in_data == self.h_sign) * (self.h_sign != 0.0)
-        h_td_out = self.h_td * m
-        self.h_td[m] = 0.0
-        m = (trig_in_data == self.v_sign) * (self.v_sign != 0.0)
-        v_td_out = self.v_td * m
-        self.v_td[m] = 0.0
-
-        # increase each counter if it is more than zero
-        # if td is zeros, no input was received and the counter
-        # does not need to be increased
-        self.v_td[self.v_td > 0] += 1
-        self.v_td[self.v_td < 0] -= 1
-
-        self.h_td[self.h_td > 0] += 1
-        self.h_td[self.h_td < 0] -= 1
-
-        # TODO what happens when both input directions fire a the same time?
-        # store the polarity of the event that starts the counter
-        self.v_sign = self.v_sign * (up_in_data == 0) + (up_in_data * (trig_in_data == 0.0))
-        self.v_sign = self.v_sign * (down_in_data == 0) + (down_in_data * (trig_in_data == 0.0))
-        self.h_sign = self.h_sign * (right_in_data == 0) + (right_in_data * (trig_in_data == 0.0))
-        self.h_sign = self.h_sign * (left_in_data == 0) + (left_in_data * (trig_in_data == 0.0))
-        # start the counter if one of the input arrives,
-        # but ignore the input if the corresponding counter is already active
-        # If a trigger arrived in the same timestep, the counter is not started
-        self.v_td = self.v_td * (up_in_data == 0.0) + (np.abs(up_in_data) * (trig_in_data == 0.0))
-        self.v_td = self.v_td * (down_in_data == 0.0) - (np.abs(down_in_data) * (trig_in_data == 0.0))
-        self.h_td = self.h_td * (right_in_data == 0.0) + (np.abs(right_in_data) * (trig_in_data == 0.0))
-        self.h_td = self.h_td * (left_in_data == 0.0) - (np.abs(left_in_data) * (trig_in_data == 0.0))
-
-        # send the output spikes
-        # for now as two difference variable TODO change
-
-        self.u_out.send(h_td_out)
-        self.v_out.send(v_td_out)
-
-        d = h_td_out * 0.002 * (-103) + v_td_out * 0.002 * (0)
-        d *= d > 0.0
-        self.d_out.send(d)
+        self.flow.u_out.connect(proc.out_ports.u_out)
+        self.flow.v_out.connect(proc.out_ports.v_out)
+        self.flow.d_out.connect(proc.out_ports.d_out)

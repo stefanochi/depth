@@ -8,7 +8,7 @@ def get_translational_flow(t, f, C, shape):
         for y in range(u_flow.shape[0]):
             # shift coordinates to be centered
             xi = x - C[0]
-            yi = y - C[1]
+            yi = np.abs(y - u_flow.shape[0]) - C[1]
 
             # compute image flow
             m = np.array([
@@ -30,7 +30,7 @@ def get_angular_flow(w, f, C, shape):
         for y in range(u_flow.shape[0]):
             # center
             xi = x - C[0]
-            yi = y - C[1]
+            yi = np.abs(y - u_flow.shape[0]) - C[1]
 
             m = np.array([
                 [(xi*yi)/f, -(xi**2)/f - f, yi],

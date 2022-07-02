@@ -16,6 +16,20 @@ from semd.proc.semd_2d.process import Semd2dLayer
 
 from utils import get_events_range
 
+class LifRunConfig(RunConfig):
+    """Run configuration selects appropriate LIF ProcessModel based on tag:
+    floating point precision or Loihi bit-accurate fixed point precision"""
+
+    def __init__(self, custom_sync_domains=None, select_tag='fixed_pt'):
+        super().__init__(custom_sync_domains=custom_sync_domains)
+        self.select_tag = select_tag
+
+    def select(self, proc, proc_models):
+        for pm in proc_models:
+            if self.select_tag in pm.tags:
+                return pm
+        raise AssertionError("No legal ProcessModel found.")
+
 def filter_patch(events, patch_center, patch_size):
     x_lim = (patch_center[1] - int(patch_size / 2), patch_center[1] + int(patch_size / 2) - 1)
     y_lim = (patch_center[0] - int(patch_size / 2), patch_center[0] + int(patch_size / 2) - 1)
@@ -44,10 +58,13 @@ def gen_input_data(events, shape, timesteps):
 
         time = int((float(e[0]) - t_start) / duration * timesteps) - 1
 
+        pol = 0
         if e[3] == 1:
-            continue
+            pol = 1
+        if e[3] == 0:
+            pol = -1
 
-        result[y, x, time] = 1
+        result[y, x, time] = pol
     return result
 
 def run_sim(args, events, data_steps, sim_steps):
@@ -66,23 +83,29 @@ def run_sim(args, events, data_steps, sim_steps):
     input_data = gen_input_data(events, shape, data_steps)
     input_n = RingBuffer(input_data)
 
-    output_n = SinkBuffer(shape=detector_shape, buffer=sim_steps)
-    #output_n = SinkBuffer(shape=(60, 60), buffer=sim_steps)
+    output_u = SinkBuffer(shape=out_shape, buffer=sim_steps)
+    output_v = SinkBuffer(shape=out_shape, buffer=sim_steps)
+    output_d = SinkBuffer(shape=out_shape, buffer=sim_steps)
 
     input_n.s_out.connect(semd.s_in)
-    semd.s_out.connect(output_n.a_in)
+    semd.u_out.connect(output_u.a_in)
+    semd.v_out.connect(output_v.a_in)
+    semd.d_out.connect(output_d.a_in)
     
-    monitor = Monitor()
-    monitor.probe(semd.u, sim_steps)
+    # monitor = Monitor()
+    # monitor.probe(semd.u, sim_steps)
 
-    rcfg = Loihi1SimCfg(select_tag='floating_pt', select_sub_proc_model=True)
+    rcnd = RunSteps(num_steps=sim_steps)
+    rcfg = LifRunConfig(select_tag='floating_pt')
+    semd.run(condition=rcnd, run_cfg=rcfg)
 
-    for i in range(sim_steps):
-        run_condition = RunSteps(num_steps=1)
-        input_n.run(condition=run_condition, run_cfg=rcfg)
-    data = output_n.data.get()
-    data_u = monitor.get_data()
+    # for i in range(sim_steps):
+    #     run_condition = RunSteps(num_steps=1)
+    #     input_n.run(condition=run_condition, run_cfg=rcfg)
+    data_u = output_u.data.get()
+    data_v = output_v.data.get()
+    data_d = output_d.data.get()
     
     input_n.stop()
     
-    return data, data_u
+    return data_u, data_v, data_d

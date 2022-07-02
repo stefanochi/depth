@@ -56,14 +56,14 @@ class PyAverageLayerModelFloat(PyLoihiProcessModel):
         # check if the trig is close tho the mean
         m_trig = np.logical_or(
             np.logical_and(np.abs(self.mean - trig_in_data) < self.mean_thr, trig_in_data != 0.0),
-            np.logical_and(self.samples < 10, trig_in_data != 0.0))
+            np.logical_and(self.samples < 5, trig_in_data != 0.0))
 
         # if it is close, update the mean t´with the average
         self.mean[m_trig] = ((self.mean[m_trig] * self.samples[m_trig]) + trig_in_data[m_trig]) / (
                 self.samples[m_trig] + 1)
         self.samples[m_trig] += 1
 
-        s_out_data = self.mean * m_trig
+        s_out_data = trig_in_data * m_trig
         n_out_data = np.full(self.mean.shape, 1.0) * m_trig
         self.s_out.send(s_out_data)
         self.n_out.send(n_out_data)

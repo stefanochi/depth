@@ -123,19 +123,22 @@ def get_open3d_pointcloud(depth_map):
 
     return pcd
 
-def points_to_open3d_pointcloud(points):
+def points_to_open3d_pointcloud(points, cmap="jet_r", z=2):
 
     pcd = o3d.geometry.PointCloud()
     pcd.points = o3d.utility.Vector3dVector(points)
 
-    minima = min(points[:, 2])
-    maxima = max(points[:, 2])
+    minima = min(points[:, z])
+    maxima = max(points[:, z])
+    print(minima)
+    print(maxima)
+    print("---")
 
     norm = matplotlib.colors.Normalize(vmin=minima, vmax=maxima, clip=True)
-    mapper = cm.ScalarMappable(norm=norm, cmap="jet_r")
+    mapper = cm.ScalarMappable(norm=norm, cmap=cmap)
 
     colors = []
-    for v in points[:, 2]:
+    for v in points[:, z]:
         colors.append(mapper.to_rgba(v)[:3])
     colors = np.array(colors)
 

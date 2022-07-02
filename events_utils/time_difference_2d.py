@@ -294,6 +294,8 @@ class TimeDifference2d:
 def measure_td(events, shape, px_range_pred=5, dist=1, start_delay=0.1):
     last_time = np.full(shape, -1.0)
     event_sign = np.full(shape, -1)
+    std_map_U = np.zeros(shape)
+    std_map_V = np.zeros(shape)
 
     U = np.zeros(shape)
     V = np.zeros(shape)
@@ -366,43 +368,39 @@ def measure_td(events, shape, px_range_pred=5, dist=1, start_delay=0.1):
         u = h_td / dist if h_td != 0.0 else 0.0
         v = v_td / dist if v_td != 0.0 else 0.0
 
-        n = 10
+        n = 5
 
         if (y, x) in U_pred:
             U_mean = np.mean(np.array(U_pred[y, x]))
             U_std = np.std(np.array(U_pred[y, x]))
             U_len = len(U_pred[y, x])
-
-            # if np.abs(u - U_mean) > 0.01:
-            #     continue
+            std_map_U[y, x] = U_std
 
             if U_len >= n:
-                U[y, x] = U_mean
-                # u = 0.0
-            else:
-                U[y, x] = u
+                if U_std >= 0.01:
+                    U[y, x] = 0.0
+                else:
+                    if np.abs(u - U_mean) > 0.01:
+                        continue
+                    U[y, x] = u
         else:
-            U[y, x] = u
+            U[y, x] = 0.0
 
         if (y, x) in V_pred:
             V_mean = np.mean(np.array(V_pred[y, x]))
             V_std = np.std(np.array(V_pred[y, x]))
             V_len = len(V_pred[y, x])
-
-            # if np.abs(v - V_mean) > 0.01:
-            #     continue
+            std_map_V[y, x] = V_std
 
             if V_len >= n:
-                V[y, x] = V_mean
-                # v = 0.0
-            else:
-                V[y, x] = v
+                if V_std >= 0.01:
+                    V[y, x] = 0.0
+                else:
+                    if np.abs(v - V_mean) > 0.01:
+                        continue
+                    V[y, x] = v
         else:
-            V[y, x] = v
-
-
-        U[y, x] = U[y, x] if U[y, x] != 0.0 else 0.0
-        V[y, x] = V[y, x] if V[y, x] != 0.0 else 0.0
+            V[y, x] = 0.0
 
         for i in range(-int(px_range_pred / 2), int(px_range_pred / 2)):
             for k in range(-int(px_range_pred / 2), int(px_range_pred / 2)):
@@ -424,4 +422,373 @@ def measure_td(events, shape, px_range_pred=5, dist=1, start_delay=0.1):
                 else:
                     V_pred[y_p, x_p] = [v]
 
+    return U, V, std_map_U, std_map_V
+
+
+def measure_td2(events, shape, px_range_pred=5, dist=1, start_delay=0.1, std_thr=0.05, mean_thr=0.01, final_delay=0.15):
+    last_time = np.full(shape, -1.0)
+    event_sign = np.full(shape, -1)
+    std_map_m = np.zeros(shape)
+
+    U = np.zeros(shape)
+    V = np.zeros(shape)
+
+    m_pred = {}
+
+    start_time = events[0, 0]
+
+    for e in tqdm(events):
+        x = int(e[1])
+        y = int(e[2])
+
+        #         if e[3] != 1:
+        #             continue
+
+        last_sign = event_sign[y, x]
+        last_time[y, x] = e[0]
+        event_sign[y, x] = e[3]
+
+        if e[0] < start_time + start_delay:
+            continue
+
+        u_td = (e[0] - last_time[y - dist, x]
+                if y - dist >= 0 and last_time[y - dist, x] != -1.0 and event_sign[y - dist, x] == e[3]
+                else -1.0)
+        d_td = (e[0] - last_time[y + dist, x]
+                if y + dist < shape[0] and last_time[y + dist, x] != -1.0 and event_sign[y + dist, x] == e[3]
+                else -1.0)
+        r_td = (e[0] - last_time[y, x + dist]
+                if x + dist < shape[1] and last_time[y, x + dist] != -1.0 and event_sign[y, x + dist] == e[3]
+                else -1.0)
+        l_td = (e[0] - last_time[y, x - dist]
+                if x - dist >= 0 and last_time[y, x - dist] != -1.0 and event_sign[y, x - dist] == e[3]
+                else -1.0)
+
+        if u_td <= 0.0:
+            if d_td <= 0.0:
+                v_td = 0.0
+            #                 continue
+            else:
+                v_td = d_td
+        else:
+            if d_td > 0:
+                v_td = d_td if d_td <= u_td else -u_td
+            #                 v_td = 0.0
+                continue
+            else:
+                v_td = -u_td
+
+        if r_td <= 0.0:
+            if l_td <= 0.0:
+                h_td = 0.0
+            #                 continue
+            else:
+                h_td = l_td
+        else:
+            if l_td > 0:
+                h_td = l_td if l_td <= r_td else -r_td
+            #                 h_td = 0.0
+                continue
+            else:
+                h_td = -r_td
+
+        # if np.abs(v_td) < 0.005:
+        #     v_td = 0.0
+        # if np.abs(h_td) < 0.005:
+        #     h_td = 0.0
+
+        u = h_td / dist if h_td != 0.0 else 0.0
+        v = v_td / dist if v_td != 0.0 else 0.0
+
+        n = 5
+
+        m = np.sqrt(u ** 2 + v ** 2)
+
+        # if m < 0.002:
+        #     continue
+
+        if (y, x) in m_pred:
+            m_mean = np.mean(np.array(m_pred[y, x]))
+            m_std = np.std(np.array(m_pred[y, x]))
+            m_len = len(m_pred[y, x])
+
+            if m_len >= n:
+                std_map_m[y, x] = np.abs(m - m_mean)
+                if m_std >= std_thr:
+                    U[y, x] = 0.0
+                    V[y, x] = 0.0
+                else:
+                    if np.abs(m - m_mean) > mean_thr:
+                        continue
+                    if e[0] < start_time + final_delay:
+                        U[y, x] = 0.0
+                        V[y, x] = 0.0
+                    else:
+                        U[y, x] = u
+                        V[y, x] = v
+        else:
+            U[y, x] = 0.0
+            V[y, x] = 0.0
+
+        for i in range(-int(px_range_pred / 2), int(px_range_pred / 2)):
+            for k in range(-int(px_range_pred / 2), int(px_range_pred / 2)):
+
+                x_p = x + i
+                y_p = y + k
+
+                if x_p < 0 or x_p >= shape[1] or y_p < 0 or y_p >= shape[0]:
+                    continue
+
+
+
+                if (y_p, x_p) in m_pred:
+                    m_pred[y_p, x_p].append(m)
+                else:
+                    m_pred[y_p, x_p] = [m]
+
+    return U, V, std_map_m, np.zeros(shape)
+
+def measure_td_raw(events, shape, dist=1):
+    last_time = np.full(shape, -1.0)
+    event_sign = np.full(shape, -1)
+    std_map_m = np.zeros(shape)
+
+    U = np.zeros(shape)
+    V = np.zeros(shape)
+
+    m_pred = {}
+
+    start_time = events[0, 0]
+
+    for e in tqdm(events):
+        x = int(e[1])
+        y = int(e[2])
+
+        #         if e[3] != 1:
+        #             continue
+
+        last_sign = event_sign[y, x]
+        last_time[y, x] = e[0]
+        event_sign[y, x] = e[3]
+
+        u_td = (e[0] - last_time[y - dist, x]
+                if y - dist >= 0 and last_time[y - dist, x] != -1.0 and event_sign[y - dist, x] == e[3]
+                else -1.0)
+        d_td = (e[0] - last_time[y + dist, x]
+                if y + dist < shape[0] and last_time[y + dist, x] != -1.0 and event_sign[y + dist, x] == e[3]
+                else -1.0)
+        r_td = (e[0] - last_time[y, x + dist]
+                if x + dist < shape[1] and last_time[y, x + dist] != -1.0 and event_sign[y, x + dist] == e[3]
+                else -1.0)
+        l_td = (e[0] - last_time[y, x - dist]
+                if x - dist >= 0 and last_time[y, x - dist] != -1.0 and event_sign[y, x - dist] == e[3]
+                else -1.0)
+
+        if u_td <= 0.0:
+            if d_td <= 0.0:
+                v_td = 0.0
+            #                 continue
+            else:
+                v_td = d_td
+        else:
+            if d_td > 0:
+                v_td = d_td if d_td <= u_td else -u_td
+            #                 v_td = 0.0
+                continue
+            else:
+                v_td = -u_td
+
+        if r_td <= 0.0:
+            if l_td <= 0.0:
+                h_td = 0.0
+            #                 continue
+            else:
+                h_td = l_td
+        else:
+            if l_td > 0:
+                h_td = l_td if l_td <= r_td else -r_td
+            #                 h_td = 0.0
+                continue
+            else:
+                h_td = -r_td
+
+        # if np.abs(v_td) < 0.005:
+        #     v_td = 0.0
+        # if np.abs(h_td) < 0.005:
+        #     h_td = 0.0
+
+        u = h_td / dist if h_td != 0.0 else 0.0
+        v = v_td / dist if v_td != 0.0 else 0.0
+
+
+        U[y, x] = u
+        V[y, x] = v
+
     return U, V
+
+def extract_depth2(shape, U, V, t_U, t_V):
+    test_u = np.zeros(shape)
+    test_v = np.zeros(shape)
+    test = np.zeros(shape)
+    for x in range(U.shape[1]):
+        for y in range(U.shape[0]):
+
+            tdu = U[y, x]
+            tdv = V[y, x]
+
+            if tdu == 0.0 and tdv == 0.0:
+                continue
+
+            # find the normal flow
+            tdn = np.sqrt(tdu ** 2 + tdv ** 2)
+            un = 1 / tdn
+
+            u = (tdu / tdn) * un
+            v = (tdv / tdn) * un
+
+            tu = t_U[y, x]
+            tv = t_V[y, x]
+
+            tm = np.sqrt(tu**2 + tv**2)
+            # if tm < 20:
+            #     continue
+
+            # find optical flow with projection
+
+            z_inv = un / (tu * (u / un) + tv * (v / un))
+
+            ofn = un**2 / ( (tu/tm)*u + (tv/tm)*v)
+
+            test_u[y, x] = (tu / tm) * ofn  # tu * z_inv
+            test_v[y, x] = (tv / tm) * ofn  # tv * z_inv
+
+            if z_inv <= 0.0:
+                continue
+
+            test[y, x] = 1 / z_inv
+
+    return test, test_u, test_v
+
+
+
+def extract_depth(shape, U, V, t_U, t_V):
+    test_u = np.zeros(shape)
+    test_v = np.zeros(shape)
+    test = np.zeros(shape)
+    for x in range(U.shape[1]):
+        for y in range(U.shape[0]):
+            tdu = U[y, x]
+            tdv = V[y, x]
+
+            tu = t_U[y, x]
+            tv = t_V[y, x]
+
+            z = tdu * tu + tdv * tv
+
+            if z < 0.0:
+                continue
+
+            test[y, x] = z
+
+    return test, test_u, test_v
+
+
+def extract_depth3(shape, U, V, t_U, t_V):
+    test_u = np.zeros(shape)
+    test_v = np.zeros(shape)
+    test = np.zeros(shape)
+    for x in range(U.shape[1]):
+        for y in range(U.shape[0]):
+            tdu = U[y, x] 
+            tdv = V[y, x]
+
+            u = 1.0 / tdu if np.abs(tdu) > 0.001 and np.abs(tdu) < 0.1 else 0.0
+            v = 1.0 / tdv if np.abs(tdv) > 0.001 and np.abs(tdv) < 0.1 else 0.0
+
+            m = np.sqrt(u**2 + v**2)**2
+
+            if m == 0.0:
+                continue
+
+            tu = t_U[y, x]
+            tv = t_V[y, x]
+
+            un = u / m
+            vn = v / m
+
+            z = tu * (u / m) + tv * (u / m)
+
+            # if z <= 0.0:
+            #     continue
+
+            test_u[y, x] = tdu
+            test_v[y, x] = tdv
+
+            test[y, x] = z
+
+    return test, test_u, test_v
+
+
+def extract_depth4(shape, U, V, t_U, t_V):
+    test_u = np.zeros(shape)
+    test_v = np.zeros(shape)
+    test = np.zeros(shape)
+    for x in range(U.shape[1]):
+        for y in range(U.shape[0]):
+            tdu = U[y, x]
+            tdv = V[y, x]
+
+            u = 1.0 / tdu if not np.isclose(np.abs(tdu), 0.0) else 0.0
+            v = 1.0 / tdv if not np.isclose(np.abs(tdv), 0.0) else 0.0
+
+            tu = t_U[y, x]
+            tv = t_V[y, x]
+
+            m = tdu**2 + tdv**2
+
+            if m == 0.0:
+                continue
+
+            z = (tu*tdv + tv*tdu)
+            # z /= np.sqrt(u**2+v**2)**2
+            z *= (tdu*tdv) / m
+
+            # if z <= 0.0:
+            #     continue
+
+            test[y, x] = z
+
+    return test, test_u, test_v
+
+def filter_depth(d, thresh, patch_size):
+    d_copy = np.ma.copy(d)
+    m = int(patch_size / 2)
+    for x in range(d_copy.shape[1]):
+        for y in range(d_copy.shape[0]):
+            if not d_copy.mask[y, x]:
+                patch = d_copy[y-m:y+m+1, x-m:x+m+1]
+                s = patch.compressed().sum() - d_copy.data[y, x]
+                n = np.logical_not(patch.mask).astype(int).sum()
+                if n == 0:
+                    continue
+                mean = s / n
+                std = np.ma.std(patch)
+                if np.abs(mean - d_copy.data[y, x]) > thresh*std and n > 1:
+                    d_copy.mask[y, x] = True
+    return d_copy
+
+def median_filter(d, patch_size):
+    d_copy = np.ma.copy(d)
+    m = int(patch_size / 2)
+    for x in range(d_copy.shape[1]):
+        for y in range(d_copy.shape[0]):
+            if not d_copy.mask[y, x]:
+                ymin = np.max([0, y-m])
+                ymax = np.min([y+m+1, d.shape[0]])
+                xmin = np.max([0, x - m])
+                xmax = np.min([x + m + 1, d.shape[1]])
+                patch = d_copy[ymin:ymax, xmin:xmax]
+                d_copy.data[y, x] = np.median(patch.compressed())
+    return d_copy
+
+

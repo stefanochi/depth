@@ -18,7 +18,6 @@ class TDE(AbstractProcess):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         shape = kwargs.get("shape", (1,))
-        trig = kwargs.pop("trig", 0)
 
         self.shape = shape
         self.a_in = InPort(shape=shape)
@@ -40,7 +39,7 @@ class PyTdeModelFloat(PyLoihiProcessModel):
     """
     a_in: PyInPort = LavaPyType(PyInPort.VEC_DENSE, float)
     s_out: PyOutPort = LavaPyType(PyOutPort.VEC_DENSE, float)
-    t_in: PyInPort = LavaPyType(PyInPort.VEC_DENSE, float, precision=2)
+    t_in: PyInPort = LavaPyType(PyInPort.VEC_DENSE, float)
 
     counter: np.ndarray = LavaPyType(np.ndarray, float)
     sign: np.ndarray = LavaPyType(np.ndarray, int)
@@ -50,13 +49,13 @@ class PyTdeModelFloat(PyLoihiProcessModel):
         a_in_data = self.a_in.recv()
 
         # check if trigger is received
-        m = (np.sign(trig_in_data) == self.sign) * (self.h_sign != 0)
+        m = (np.sign(trig_in_data) == self.sign) * (self.sign != 0)
         s_out_data = self.counter * m
         # reset the counter
         self.counter[m] = 0.0
 
         # increase the counters that are started
-        self.couter[self.counter > 0] += 1
+        self.counter[self.counter > 0] += 1
 
         # if a new spike arrives (a_in) start the counter (or restart) and store the sign
         # If a trigger arrived in the same timestep, the counter is not started
