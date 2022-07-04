@@ -594,7 +594,7 @@ def measure_td_raw(events, shape, dist=1):
             if d_td > 0:
                 v_td = d_td if d_td <= u_td else -u_td
             #                 v_td = 0.0
-                continue
+            #     continue
             else:
                 v_td = -u_td
 
@@ -608,7 +608,7 @@ def measure_td_raw(events, shape, dist=1):
             if l_td > 0:
                 h_td = l_td if l_td <= r_td else -r_td
             #                 h_td = 0.0
-                continue
+            #     continue
             else:
                 h_td = -r_td
 
@@ -675,20 +675,21 @@ def extract_depth(shape, U, V, t_U, t_V):
     test_u = np.zeros(shape)
     test_v = np.zeros(shape)
     test = np.zeros(shape)
-    for x in range(U.shape[1]):
-        for y in range(U.shape[0]):
-            tdu = U[y, x]
-            tdv = V[y, x]
-
-            tu = t_U[y, x]
-            tv = t_V[y, x]
-
-            z = tdu * tu + tdv * tv
-
-            if z < 0.0:
-                continue
-
-            test[y, x] = z
+    # for x in range(U.shape[1]):
+    #     #     for y in range(U.shape[0]):
+    #     #         tdu = U[y, x]
+    #     #         tdv = V[y, x]
+    #     #
+    #     #         tu = t_U[y, x]
+    #     #         tv = t_V[y, x]
+    #     #
+    #     #         z = tdu * tu + tdv * tv
+    #     #
+    #     #         if z < 0.0:
+    #     #             continue
+    #     #
+    #     #         test[y, x] = z
+    test = U*t_U + V*t_V
 
     return test, test_u, test_v
 
@@ -787,7 +788,7 @@ def median_filter(d, patch_size):
                 ymax = np.min([y+m+1, d.shape[0]])
                 xmin = np.max([0, x - m])
                 xmax = np.min([x + m + 1, d.shape[1]])
-                patch = d_copy[ymin:ymax, xmin:xmax]
+                patch = d[ymin:ymax, xmin:xmax]
                 d_copy.data[y, x] = np.median(patch.compressed())
     return d_copy
 
