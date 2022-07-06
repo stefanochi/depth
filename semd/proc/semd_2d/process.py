@@ -53,6 +53,7 @@ class Semd2dLayer(AbstractProcess):
         self.u_out = OutPort(shape=self.out_shape)
         self.v_out = OutPort(shape=self.out_shape)
         self.d_out = OutPort(shape=self.out_shape)
+        self.avg_out = OutPort(shape=self.out_shape)
         self.vth = Var(shape=(1,), init=vth)
 
 
@@ -131,8 +132,6 @@ class Semd2dLayerModel(AbstractSubProcessModel):
         self.td.d_out.flatten().connect(self.dense_avg.s_in)
         self.dense_avg.a_out.reshape(out_shape).connect(self.average_layer.trig_in)
 
-        # use convolution to connect the average layer
-        # connect(self.average_layer.s_out, self.average_layer.s_in, ops=[Convolution(np.full((5, 5), 1.0))])
         conv = Convolution(np.full((7, 7), 1.0))
         conv.configure(out_shape)
         conv_weights = conv._compute_weights() - np.eye(n_elems)
@@ -145,17 +144,7 @@ class Semd2dLayerModel(AbstractSubProcessModel):
         self.average_layer.n_out.flatten().connect(self.n_conv_dense.s_in)
         self.n_conv_dense.a_out.reshape(out_shape).connect(self.average_layer.n_in)
 
-        # avg_conv_shape = (5, 5)
-        # avg_conv_stride = (1, 1)
-        # avg_conv_weights = 1.0
-        # self.avg_conv = ReshapeConv(input_shape=detector_shape, conv_shape=avg_conv_shape, conv_stride=avg_conv_stride,
-        #                             bias_weight=avg_conv_weights, conv_padding=(2, 2))
-        #
-        # self.average_layer.s_out.connect(self.avg_conv.s_in)
-        # self.avg_conv.s_out.connect(self.average_layer.s_in)
-
         self.td.u_out.connect(proc.out_ports.u_out)
         self.td.v_out.connect(proc.out_ports.v_out)
         self.td.d_out.connect(proc.out_ports.d_out)
-
-        # proc.vars.u.alias(self.detector.vars.u)
+        self.average_layer.s_out.connect(proc.out_ports.avg_out)

@@ -18,11 +18,10 @@ from lava.proc.dense.process import Dense
 from semd.proc.tde_2d.process import TDE2D
 from semd.proc.average_layer.process import AverageLayer
 from semd.proc.reshape_conv.process import ReshapeConv
+from semd.proc.camera_input.process import CameraInputLayer
 
-
-from lava.lib.dnf.connect.connect import connect
 from lava.lib.dnf.operations.operations import Convolution
-from lava.lib.dnf.operations.operations import Weights
+
 
 class LifRunConfig(RunConfig):
     """Run configuration selects appropriate LIF ProcessModel based on tag:
@@ -328,7 +327,7 @@ class TestTd2d(unittest.TestCase):
         up_times = np.zeros((num_steps,), dtype=bool)
         up_times[2] = True
         up_snd = VecSendProcess(shape=shape, num_steps=num_steps,
-                                vec_to_send=np.full(shape, -1.0,  dtype=float),
+                                vec_to_send=np.full(shape, -1.0, dtype=float),
                                 send_at_times=up_times)
         down_times = np.zeros((num_steps,), dtype=bool)
         down_snd = VecSendProcess(shape=shape, num_steps=num_steps,
@@ -346,7 +345,7 @@ class TestTd2d(unittest.TestCase):
         trig_times = np.zeros((num_steps,), dtype=bool)
         trig_times[4] = True
         trig_snd = VecSendProcess(shape=shape, num_steps=num_steps,
-                                  vec_to_send=np.full(shape, -1.0,  dtype=float),
+                                  vec_to_send=np.full(shape, -1.0, dtype=float),
                                   send_at_times=trig_times)
 
         u_rcv = VecRecvProcess(shape_in=shape, num_steps=num_steps)
@@ -394,7 +393,7 @@ class TestTd2d(unittest.TestCase):
         up_times = np.zeros((num_steps,), dtype=bool)
         up_times[2] = True
         up_snd = VecSendProcess(shape=shape, num_steps=num_steps,
-                                vec_to_send=np.full(shape, -1.0,  dtype=float),
+                                vec_to_send=np.full(shape, -1.0, dtype=float),
                                 send_at_times=up_times)
         down_times = np.zeros((num_steps,), dtype=bool)
         down_snd = VecSendProcess(shape=shape, num_steps=num_steps,
@@ -413,13 +412,13 @@ class TestTd2d(unittest.TestCase):
         trig_times = np.zeros((num_steps,), dtype=bool)
         trig_times[4] = True
         trig_snd = VecSendProcess(shape=shape, num_steps=num_steps,
-                                  vec_to_send=np.full(shape, -1.0,  dtype=float),
+                                  vec_to_send=np.full(shape, -1.0, dtype=float),
                                   send_at_times=trig_times)
         trig_times_pos = np.zeros((num_steps,), dtype=bool)
         trig_times_pos[6] = True
         trig_snd_pos = VecSendProcess(shape=shape, num_steps=num_steps,
-                                  vec_to_send=np.full(shape, 1.0, dtype=float),
-                                  send_at_times=trig_times_pos)
+                                      vec_to_send=np.full(shape, 1.0, dtype=float),
+                                      send_at_times=trig_times_pos)
 
         u_rcv = VecRecvProcess(shape_in=shape, num_steps=num_steps)
         v_rcv = VecRecvProcess(shape_in=shape, num_steps=num_steps)
@@ -466,7 +465,7 @@ class TestTd2d(unittest.TestCase):
         up_times = np.zeros((num_steps,), dtype=bool)
         up_times[2] = True
         up_snd = VecSendProcess(shape=shape, num_steps=num_steps,
-                                vec_to_send=np.full(shape, 1.0,  dtype=float),
+                                vec_to_send=np.full(shape, 1.0, dtype=float),
                                 send_at_times=up_times)
         down_times = np.zeros((num_steps,), dtype=bool)
         down_times[4] = True
@@ -476,7 +475,7 @@ class TestTd2d(unittest.TestCase):
         right_times = np.zeros((num_steps,), dtype=bool)
         right_times[4] = True
         right_snd = VecSendProcess(shape=shape, num_steps=num_steps,
-                                   vec_to_send=np.full(shape, -1.0,  dtype=float),
+                                   vec_to_send=np.full(shape, -1.0, dtype=float),
                                    send_at_times=right_times)
         left_times = np.zeros((num_steps,))
         left_times[2] = True
@@ -487,21 +486,21 @@ class TestTd2d(unittest.TestCase):
         trig_times = np.zeros((num_steps,), dtype=bool)
         trig_times[7] = True
         trig_snd = VecSendProcess(shape=shape, num_steps=num_steps,
-                                  vec_to_send=np.full(shape, -1.0,  dtype=float),
+                                  vec_to_send=np.full(shape, -1.0, dtype=float),
                                   send_at_times=trig_times)
         trig_times_pos = np.zeros((num_steps,), dtype=bool)
         trig_times_pos[6] = True
         trig_snd_pos = VecSendProcess(shape=shape, num_steps=num_steps,
-                                  vec_to_send=np.full(shape, 1.0, dtype=float),
-                                  send_at_times=trig_times_pos)
+                                      vec_to_send=np.full(shape, 1.0, dtype=float),
+                                      send_at_times=trig_times_pos)
 
         u_rcv = VecRecvProcess(shape_in=shape, num_steps=num_steps)
         v_rcv = VecRecvProcess(shape_in=shape, num_steps=num_steps)
 
         # up_snd.s_out.connect(td2d.up_in)
         down_snd.s_out.connect(td2d.down_in)
-        #left_snd.s_out.connect(td2d.left_in)
-        #right_snd.s_out.connect(td2d.right_in)
+        # left_snd.s_out.connect(td2d.left_in)
+        # right_snd.s_out.connect(td2d.right_in)
 
         trig_snd.s_out.connect(td2d.trig_in)
         trig_snd_pos.s_out.connect(td2d.trig_in)
@@ -526,6 +525,7 @@ class TestTd2d(unittest.TestCase):
         self.assertTrue(np.all(expected_out_v == v_data), msg="{0}".format(v_data))
         self.assertTrue(np.all(expected_out_u == u_data), msg="{0}".format(u_data))
 
+
 class TestAverageLayer(unittest.TestCase):
     def test_avg_conv(self):
         """
@@ -541,18 +541,18 @@ class TestAverageLayer(unittest.TestCase):
         two_times[2] = True
         vec = np.zeros(shape)
         vec[0, 1] = 2.0
-        #vec[2, 2] = 4.0
+        # vec[2, 2] = 4.0
         two_snd = VecSendProcess(shape=shape, num_steps=num_steps,
-                                vec_to_send=vec,
-                                send_at_times=two_times)
+                                 vec_to_send=vec,
+                                 send_at_times=two_times)
         four_times = np.zeros((num_steps,), dtype=bool)
         four_times[3] = True
         vec = np.zeros(shape)
         vec[2, 1] = 4.0
         # vec[2, 2] = 4.0
         four_snd = VecSendProcess(shape=shape, num_steps=num_steps,
-                                 vec_to_send=vec,
-                                 send_at_times=four_times)
+                                  vec_to_send=vec,
+                                  send_at_times=four_times)
 
         trig_times = np.zeros((num_steps,), dtype=bool)
         trig_times[4] = True
@@ -598,5 +598,140 @@ class TestAverageLayer(unittest.TestCase):
         expected_out_u[4, :] = 3.0
 
         self.assertTrue(np.all(expected_out_u == u_data), msg="{0}".format(u_data))
+
+
+class TestCameraInput(unittest.TestCase):
+    def test_flow_xy(self):
+        vel_vec = np.array([1, -1, 0])
+        vel_snd = VecSendProcess(shape=(3,), num_steps=3,
+                                 vec_to_send=vel_vec,
+                                 send_at_times=[0, 1, 0])
+
+        cam_input = CameraInputLayer(shape=(3, 3),
+                                     focal_length=100,
+                                     center_x=1,
+                                     center_y=1)
+
+        x_rcv = VecRecvProcess(shape_in=(3, 3), num_steps=3)
+        y_rcv = VecRecvProcess(shape_in=(3, 3), num_steps=3)
+
+        vel_snd.s_out.connect(cam_input.s_in)
+
+        cam_input.x_out.connect(x_rcv.s_in)
+        cam_input.y_out.connect(y_rcv.s_in)
+
+        rcnd = RunSteps(num_steps=3)
+        rcfg = LifRunConfig(select_tag='floating_pt')
+        cam_input.run(condition=rcnd, run_cfg=rcfg)
+
+        x_data = x_rcv.spk_data.get()
+        y_data = y_rcv.spk_data.get()
+
+        cam_input.stop()
+
+        flow = get_translational_flow(vel_vec, 100, [1, 1], (3, 3))
+        expected_output_x = np.zeros((3, 3, 3))
+        expected_output_x[1][:] = flow[0]
+        expected_output_y = np.zeros((3, 3, 3))
+        expected_output_y[1][:] = flow[1]
+
+        self.assertTrue(np.all(expected_output_x == x_data), msg="{}".format(x_data))
+        self.assertTrue(np.all(expected_output_y == y_data), msg="{}".format(y_data))
+
+    def test_flow_z(self):
+        vel_vec = np.array([0, 0, 1])
+        vel_snd = VecSendProcess(shape=(3,), num_steps=3,
+                                 vec_to_send=vel_vec,
+                                 send_at_times=[0, 1, 0])
+
+        cam_input = CameraInputLayer(shape=(3, 3),
+                                     focal_length=100,
+                                     center_x=1,
+                                     center_y=1)
+
+        x_rcv = VecRecvProcess(shape_in=(3, 3), num_steps=3)
+        y_rcv = VecRecvProcess(shape_in=(3, 3), num_steps=3)
+
+        vel_snd.s_out.connect(cam_input.s_in)
+
+        cam_input.x_out.connect(x_rcv.s_in)
+        cam_input.y_out.connect(y_rcv.s_in)
+
+        rcnd = RunSteps(num_steps=3)
+        rcfg = LifRunConfig(select_tag='floating_pt')
+        cam_input.run(condition=rcnd, run_cfg=rcfg)
+
+        x_data = x_rcv.spk_data.get()
+        y_data = y_rcv.spk_data.get()
+
+        cam_input.stop()
+
+        flow = get_translational_flow(vel_vec, 100, [1, 1], (3, 3))
+        expected_output_x = np.zeros((3, 3, 3))
+        expected_output_x[1][:] = flow[0]
+        expected_output_y = np.zeros((3, 3, 3))
+        expected_output_y[1][:] = flow[1]
+
+        self.assertTrue(np.all(expected_output_x == x_data), msg="{}".format(x_data))
+        self.assertTrue(np.all(expected_output_y == y_data), msg="{}".format(y_data))
+
+    def test_flow_xyz(self):
+        vel_vec = np.array([1, 2, 3])
+        vel_snd = VecSendProcess(shape=(3,), num_steps=3,
+                                 vec_to_send=vel_vec,
+                                 send_at_times=[0, 1, 0])
+
+        cam_input = CameraInputLayer(shape=(3, 3),
+                                     focal_length=100,
+                                     center_x=1,
+                                     center_y=1)
+
+        x_rcv = VecRecvProcess(shape_in=(3, 3), num_steps=3)
+        y_rcv = VecRecvProcess(shape_in=(3, 3), num_steps=3)
+
+        vel_snd.s_out.connect(cam_input.s_in)
+
+        cam_input.x_out.connect(x_rcv.s_in)
+        cam_input.y_out.connect(y_rcv.s_in)
+
+        rcnd = RunSteps(num_steps=3)
+        rcfg = LifRunConfig(select_tag='floating_pt')
+        cam_input.run(condition=rcnd, run_cfg=rcfg)
+
+        x_data = x_rcv.spk_data.get()
+        y_data = y_rcv.spk_data.get()
+
+        cam_input.stop()
+
+        flow = get_translational_flow(vel_vec, 100, [1, 1], (3, 3))
+        expected_output_x = np.zeros((3, 3, 3))
+        expected_output_x[1][:] = flow[0]
+        expected_output_y = np.zeros((3, 3, 3))
+        expected_output_y[1][:] = flow[1]
+
+        self.assertTrue(np.all(expected_output_x == x_data), msg="{}".format(x_data))
+        self.assertTrue(np.all(expected_output_y == y_data), msg="{}".format(y_data))
+
+def get_translational_flow(t, f, C, shape):
+    u_flow = np.zeros(shape)
+    v_flow = np.zeros(shape)
+    for x in range(u_flow.shape[1]):
+        for y in range(u_flow.shape[0]):
+            # shift coordinates to be centered
+            xi = x - C[0]
+            yi = np.abs(y - u_flow.shape[0] +1) - C[1]
+
+            # compute image flow
+            m = np.array([
+                [-f, 0, xi],
+                [0, -f, yi]
+            ])
+            r = m @ t
+
+            u_flow[y, x] = r[0]  # x flow
+            v_flow[y, x] = r[1]  # y flow
+
+    return u_flow, v_flow
+
 if __name__ == '__main__':
     unittest.main()
