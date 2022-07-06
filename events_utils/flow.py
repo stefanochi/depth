@@ -7,8 +7,8 @@ def get_translational_flow(t, f, C, shape):
     for x in range(u_flow.shape[1]):
         for y in range(u_flow.shape[0]):
             # shift coordinates to be centered
-            xi = x - C[0]
-            yi = np.abs(y - u_flow.shape[0]) - C[1]
+            xi = x - C[1]
+            yi = np.abs(y - u_flow.shape[0] +1) - C[0]
 
             # compute image flow
             m = np.array([
