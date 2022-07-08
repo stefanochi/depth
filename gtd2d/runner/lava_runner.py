@@ -15,6 +15,7 @@ from lava.magma.core.run_configs import RunConfig, Loihi1SimCfg
 from lava.magma.core.run_conditions import RunSteps
 
 from semd.proc.semd_2d.process import Semd2dLayer
+from semd.proc.camera_input.process import CameraInputLayer
 
 
 class LavaRunner(Runner):
@@ -33,13 +34,14 @@ class LavaRunner(Runner):
         self.tv = 0
 
         self.input_buffer = self.gen_input_data(self.events, self.shape, self.timesteps)
+        self.vel_input_buffer = self.gen_cam_inout_data(self.events, self.cam_poses, self.timesteps)
         return
 
     def gen_input_data(self, events, shape, timesteps):
         t_start = events[0, 0]
         duration = events[-1, 0] - events[0, 0]
 
-        result = np.zeros((shape[0], shape[1], timesteps), dtype=int)
+        events_buffer = np.zeros((shape[0], shape[1], timesteps), dtype=int)
         for e in events:
             x = int(e[1])
             y = int(e[2])
@@ -52,36 +54,57 @@ class LavaRunner(Runner):
             if e[3] == 0:
                 pol = -1
 
-            result[y, x, time] = pol
-        return result
+            events_buffer[y, x, time] = pol
+        return events_buffer
+
+    def gen_cam_inout_data(self, events, poses, timesteps):
+
+        t_start = events[0, 0]
+        duration = events[-1, 0] - events[0, 0]
+
+        velocities_buffer = np.zeros((3, timesteps))
+
+        for i in range(timesteps):
+            curr_time = t_start + (duration / timesteps) * i
+
+            vel = flow_utils.vel_at_time(poses, curr_time)
+            velocities_buffer[:, i] = vel[1:4]
+
+        return velocities_buffer
 
     def run(self):
-        shape = self.shape
-        conv_stride = self.conv_stride
-        conv_shape = self.conv_shape
 
         semd = Semd2dLayer(shape=self.shape,
                            conv_shape=self.conv_shape,
                            conv_stride=self.conv_stride,
-                           thresh_conv=self.thresh_conv,
-                           tu=self.tu,
-                           tv=self.tv)
+                           thresh_conv=self.thresh_conv)
+
+        cam_input = CameraInputLayer(shape=self.shape,
+                                     focal_length=self.camera_calib[0],
+                                     center_x=self.camera_calib[2],
+                                     center_y=self.camera_calib[3])
 
         out_shape = semd.out_shape
         detector_shape = semd.detector_shape
 
         input_n = RingBuffer(self.input_buffer)
+        input_cam = RingBuffer(self.vel_input_buffer)
 
         output_u = SinkBuffer(shape=out_shape, buffer=self.timesteps)
         output_v = SinkBuffer(shape=out_shape, buffer=self.timesteps)
         output_d = SinkBuffer(shape=out_shape, buffer=self.timesteps)
         output_avg = SinkBuffer(shape=out_shape, buffer=self.timesteps)
+        cam_output_x = SinkBuffer(shape=out_shape, buffer=self.timesteps)
 
         input_n.s_out.connect(semd.s_in)
+        input_cam.s_out.connect(cam_input.s_in)
+
         semd.u_out.connect(output_u.a_in)
         semd.v_out.connect(output_v.a_in)
         semd.d_out.connect(output_d.a_in)
         semd.avg_out.connect(output_avg.a_in)
+        cam_input.x_out.connect(semd.tu_in)
+        cam_input.y_out.connect(semd.tv_in)
 
         rcnd = RunSteps(num_steps=self.timesteps)
         rcfg = LifRunConfig(select_tag='floating_pt')

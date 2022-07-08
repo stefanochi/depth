@@ -1,5 +1,5 @@
 import numpy as np
-
+import scipy.sparse as sparse
 
 def get_connection_conv(shape, kernel_size):
     n_elems = shape[0] * shape[1]
@@ -62,3 +62,33 @@ def get_excit_patch(data_in, dis_x, dis_y):
 def get_trig_patch(data_in, dis_x, dis_y):
 
     return get_excit_patch(data_in, -dis_x, -dis_y)
+
+def get_connection_left_sparse(shape):
+    n_elems = shape[0] * shape[1]
+    d = np.ones(n_elems - 1)
+    d[shape[0] - 1::shape[0]] = 0
+    conn = sparse.dia_array((np.array([d]), [1]), shape=shape)
+    return conn
+
+def get_connection_right_sparse(shape):
+    n_elems = shape[0] * shape[1]
+    d = np.ones(n_elems - 1)
+    d[shape[0] - 1::shape[0]] = 0
+    conn = sparse.dia_array((np.array([d]), [-1]), shape=shape)
+    return conn
+
+def get_connection_down_sparse(shape):
+    d = np.ones(shape[0] * (shape[1] - 1))
+    conn = sparse.dia_array((np.array([d]), [-shape[0]]), shape=shape)
+    return conn
+
+def get_connection_up_sparse(shape):
+    d = np.ones(shape[0] * (shape[1] - 1))
+    conn = sparse.dia_array((np.array([d]), [shape[0]]), shape=shape)
+    return conn
+
+def get_eye_sparse(shape):
+    return sparse.eye(shape[0], format="dia")
+
+def dense_to_sparse(m):
+    return sparse.dia_array(m)

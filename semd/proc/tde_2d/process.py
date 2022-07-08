@@ -39,8 +39,8 @@ class TDE2D(AbstractProcess):
         self.v_out = OutPort(shape=shape)
         self.d_out = OutPort(shape=shape)
 
-        self.t_u = Var(shape=(1,), init=tu)
-        self.t_v = Var(shape=(1,), init=tv)
+        self.t_u = InPort(shape=shape)
+        self.t_v = InPort(shape=shape)
 
 
 @implements(proc=TDE2D, protocol=LoihiProtocol)
@@ -51,8 +51,6 @@ class PyTde2dModelFloat(AbstractSubProcessModel):
     """
     def __init__(self, proc):
         shape = proc.init_args.get("shape", (1,))
-        tu = proc.init_args.get("tu", (1, ))
-        tv = proc.init_args.get("tv", (1, ))
 
         self.up_tde = TDE(shape=shape)
         self.down_tde = TDE(shape=shape)
@@ -69,7 +67,10 @@ class PyTde2dModelFloat(AbstractSubProcessModel):
         proc.in_ports.trig_in.connect(self.right_tde.t_in)
         proc.in_ports.trig_in.connect(self.left_tde.t_in)
 
-        self.flow = ExtractFlow(shape=shape, tu=tu, tv=tv)
+        self.flow = ExtractFlow(shape=shape)
+
+        proc.in_ports.t_u.connect(self.flow.t_u)
+        proc.in_ports.t_v.connect(self.flow.t_v)
 
         self.up_tde.s_out.connect(self.flow.up_in)
         self.down_tde.s_out.connect(self.flow.down_in)

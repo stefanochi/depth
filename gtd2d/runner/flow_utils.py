@@ -48,9 +48,11 @@ def get_angular_flow(w, f, C, shape):
 def vel_at_time(poses, time):
     """Get the camera velocity at the specified time"""
     idx = np.searchsorted(poses[:, 0], time)
+    if idx != 0:
+        idx += 1
 
-    pose_start = poses[idx + 1]
-    pose_end = poses[idx]
+    pose_start = poses[idx]
+    pose_end = poses[idx + 1]
 
     # translational position difference
     t1 = pose_start[1:4]

@@ -151,6 +151,16 @@ class TestTd2d(unittest.TestCase):
                                   vec_to_send=np.ones(shape, dtype=float),
                                   send_at_times=trig_times)
 
+        tx_times = np.ones((num_steps,), dtype=bool)
+        tx_snd = VecSendProcess(shape=shape, num_steps=num_steps,
+                                vec_to_send=np.ones(shape, dtype=float),
+                                send_at_times=tx_times)
+
+        ty_times = np.ones((num_steps,), dtype=bool)
+        ty_snd = VecSendProcess(shape=shape, num_steps=num_steps,
+                                vec_to_send=np.ones(shape, dtype=float),
+                                send_at_times=ty_times)
+
         u_rcv = VecRecvProcess(shape_in=shape, num_steps=num_steps)
         v_rcv = VecRecvProcess(shape_in=shape, num_steps=num_steps)
 
@@ -158,6 +168,9 @@ class TestTd2d(unittest.TestCase):
         down_snd.s_out.connect(td2d.down_in)
         left_snd.s_out.connect(td2d.left_in)
         right_snd.s_out.connect(td2d.right_in)
+
+        tx_snd.s_out.connect(td2d.t_u)
+        ty_snd.s_out.connect(td2d.t_v)
 
         trig_snd.s_out.connect(td2d.trig_in)
 
@@ -216,6 +229,16 @@ class TestTd2d(unittest.TestCase):
                                   vec_to_send=np.ones(shape, dtype=float),
                                   send_at_times=trig_times)
 
+        tx_times = np.ones((num_steps,), dtype=bool)
+        tx_snd = VecSendProcess(shape=shape, num_steps=num_steps,
+                                vec_to_send=np.ones(shape, dtype=float),
+                                send_at_times=tx_times)
+
+        ty_times = np.ones((num_steps,), dtype=bool)
+        ty_snd = VecSendProcess(shape=shape, num_steps=num_steps,
+                                vec_to_send=np.ones(shape, dtype=float),
+                                send_at_times=ty_times)
+
         u_rcv = VecRecvProcess(shape_in=shape, num_steps=num_steps)
         v_rcv = VecRecvProcess(shape_in=shape, num_steps=num_steps)
 
@@ -223,6 +246,9 @@ class TestTd2d(unittest.TestCase):
         down_snd.s_out.connect(td2d.down_in)
         left_snd.s_out.connect(td2d.left_in)
         right_snd.s_out.connect(td2d.right_in)
+
+        tx_snd.s_out.connect(td2d.t_u)
+        ty_snd.s_out.connect(td2d.t_v)
 
         trig_snd.s_out.connect(td2d.trig_in)
 
@@ -284,6 +310,16 @@ class TestTd2d(unittest.TestCase):
                                   vec_to_send=np.ones(shape, dtype=float),
                                   send_at_times=trig_times)
 
+        tx_times = np.ones((num_steps,), dtype=bool)
+        tx_snd = VecSendProcess(shape=shape, num_steps=num_steps,
+                                vec_to_send=np.ones(shape, dtype=float),
+                                send_at_times=tx_times)
+
+        ty_times = np.ones((num_steps,), dtype=bool)
+        ty_snd = VecSendProcess(shape=shape, num_steps=num_steps,
+                                vec_to_send=np.ones(shape, dtype=float),
+                                send_at_times=ty_times)
+
         u_rcv = VecRecvProcess(shape_in=shape, num_steps=num_steps)
         v_rcv = VecRecvProcess(shape_in=shape, num_steps=num_steps)
 
@@ -291,6 +327,9 @@ class TestTd2d(unittest.TestCase):
         down_snd.s_out.connect(td2d.down_in)
         left_snd.s_out.connect(td2d.left_in)
         right_snd.s_out.connect(td2d.right_in)
+
+        tx_snd.s_out.connect(td2d.t_u)
+        ty_snd.s_out.connect(td2d.t_v)
 
         trig_snd.s_out.connect(td2d.trig_in)
 
@@ -348,6 +387,16 @@ class TestTd2d(unittest.TestCase):
                                   vec_to_send=np.full(shape, -1.0, dtype=float),
                                   send_at_times=trig_times)
 
+        tx_times = np.ones((num_steps,), dtype=bool)
+        tx_snd = VecSendProcess(shape=shape, num_steps=num_steps,
+                                vec_to_send=np.ones(shape, dtype=float),
+                                send_at_times=tx_times)
+
+        ty_times = np.ones((num_steps,), dtype=bool)
+        ty_snd = VecSendProcess(shape=shape, num_steps=num_steps,
+                                vec_to_send=np.ones(shape, dtype=float),
+                                send_at_times=ty_times)
+
         u_rcv = VecRecvProcess(shape_in=shape, num_steps=num_steps)
         v_rcv = VecRecvProcess(shape_in=shape, num_steps=num_steps)
 
@@ -355,6 +404,9 @@ class TestTd2d(unittest.TestCase):
         down_snd.s_out.connect(td2d.down_in)
         left_snd.s_out.connect(td2d.left_in)
         right_snd.s_out.connect(td2d.right_in)
+
+        tx_snd.s_out.connect(td2d.t_u)
+        ty_snd.s_out.connect(td2d.t_v)
 
         trig_snd.s_out.connect(td2d.trig_in)
 
@@ -420,6 +472,16 @@ class TestTd2d(unittest.TestCase):
                                       vec_to_send=np.full(shape, 1.0, dtype=float),
                                       send_at_times=trig_times_pos)
 
+        tx_times = np.ones((num_steps,), dtype=bool)
+        tx_snd = VecSendProcess(shape=shape, num_steps=num_steps,
+                                vec_to_send=np.ones(shape, dtype=float),
+                                send_at_times=tx_times)
+
+        ty_times = np.ones((num_steps,), dtype=bool)
+        ty_snd = VecSendProcess(shape=shape, num_steps=num_steps,
+                                vec_to_send=np.ones(shape, dtype=float),
+                                send_at_times=ty_times)
+
         u_rcv = VecRecvProcess(shape_in=shape, num_steps=num_steps)
         v_rcv = VecRecvProcess(shape_in=shape, num_steps=num_steps)
 
@@ -427,6 +489,9 @@ class TestTd2d(unittest.TestCase):
         down_snd.s_out.connect(td2d.down_in)
         left_snd.s_out.connect(td2d.left_in)
         right_snd.s_out.connect(td2d.right_in)
+
+        tx_snd.s_out.connect(td2d.t_u)
+        ty_snd.s_out.connect(td2d.t_v)
 
         trig_snd.s_out.connect(td2d.trig_in)
         trig_snd_pos.s_out.connect(td2d.trig_in)
@@ -494,6 +559,16 @@ class TestTd2d(unittest.TestCase):
                                       vec_to_send=np.full(shape, 1.0, dtype=float),
                                       send_at_times=trig_times_pos)
 
+        tx_times = np.ones((num_steps,), dtype=bool)
+        tx_snd = VecSendProcess(shape=shape, num_steps=num_steps,
+                                vec_to_send=np.ones(shape, dtype=float),
+                                send_at_times=tx_times)
+
+        ty_times = np.ones((num_steps,), dtype=bool)
+        ty_snd = VecSendProcess(shape=shape, num_steps=num_steps,
+                                vec_to_send=np.ones(shape, dtype=float),
+                                send_at_times=ty_times)
+
         u_rcv = VecRecvProcess(shape_in=shape, num_steps=num_steps)
         v_rcv = VecRecvProcess(shape_in=shape, num_steps=num_steps)
 
@@ -501,6 +576,9 @@ class TestTd2d(unittest.TestCase):
         down_snd.s_out.connect(td2d.down_in)
         # left_snd.s_out.connect(td2d.left_in)
         # right_snd.s_out.connect(td2d.right_in)
+
+        tx_snd.s_out.connect(td2d.t_u)
+        ty_snd.s_out.connect(td2d.t_v)
 
         trig_snd.s_out.connect(td2d.trig_in)
         trig_snd_pos.s_out.connect(td2d.trig_in)

@@ -20,12 +20,8 @@ class ExtractFlow(AbstractProcess):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         shape = kwargs.get("shape", (1,))
-        tu = kwargs.get("tu", (1,))
-        tv = kwargs.get("tv", (1,))
 
         self.shape = shape
-        # variables that hold the counter for
-        # horizontal and vertical motion
 
         self.up_in = InPort(shape=shape)
         self.down_in = InPort(shape=shape)
@@ -36,8 +32,8 @@ class ExtractFlow(AbstractProcess):
         self.v_out = OutPort(shape=shape)
         self.d_out = OutPort(shape=shape)
 
-        self.t_u = Var(shape=(1, ), init=tu)
-        self.t_v = Var(shape=(1, ), init=tv)
+        self.t_u = InPort(shape=shape)
+        self.t_v = InPort(shape=shape)
 
 
 @implements(proc=ExtractFlow, protocol=LoihiProtocol)
@@ -55,8 +51,8 @@ class PyExtractFlowModelFloat(PyLoihiProcessModel):
     v_out: PyOutPort = LavaPyType(PyOutPort.VEC_DENSE, float)
     d_out: PyOutPort = LavaPyType(PyOutPort.VEC_DENSE, float)
 
-    t_u: float = LavaPyType(float, float)
-    t_v: float = LavaPyType(float, float)
+    t_u: PyInPort = LavaPyType(PyInPort.VEC_DENSE, float)
+    t_v: PyInPort = LavaPyType(PyInPort.VEC_DENSE, float)
 
     def run_spk(self):
         # input from each direction
@@ -64,6 +60,9 @@ class PyExtractFlowModelFloat(PyLoihiProcessModel):
         down_td_data = self.down_in.recv()
         left_td_data = self.left_in.recv()
         right_td_data = self.right_in.recv()
+
+        t_u = self.t_u.recv()
+        t_v = self.t_v.recv()
 
         v_td_out = np.zeros(up_td_data.shape)
         u_m = np.logical_and(
@@ -92,6 +91,7 @@ class PyExtractFlowModelFloat(PyLoihiProcessModel):
         self.u_out.send(h_td_out)
         self.v_out.send(v_td_out)
 
-        d = h_td_out * self.t_u + v_td_out * self.t_v
+        # TODO change to store the values so they don't need to be sent at every timestep
+        d = h_td_out * t_u + v_td_out * t_v
         d *= d > 0.0
         self.d_out.send(d)

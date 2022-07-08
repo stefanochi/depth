@@ -38,23 +38,46 @@ class Semd2dLayer(AbstractProcess):
         conv_stride = kwargs.pop("conv_stride", (1, 1))
         thresh_conv = kwargs.pop("thresh_conv", 0.5)
         vth = kwargs.pop("vth", 10)
-        tu = kwargs.get("tu", (1,))
-        tv = kwargs.get("tv", (1,))
 
         bias_weight = vth / conv_shape[0] * conv_shape[1] * thresh_conv
         # convolution layer with reshape proc
-        conv = ReshapeConv(input_shape=shape, conv_shape=conv_shape, conv_stride=conv_stride,
+        conv = ReshapeConv(input_shape=shape,
+                           conv_shape=conv_shape,
+                           conv_stride=conv_stride,
                            bias_weight=bias_weight)
 
         self.out_shape = conv.out_shape
-        self.detector_shape = (self.out_shape[0] - 2, self.out_shape[1] - 2)
 
         self.s_in = InPort(shape=shape)
+        self.tu_in = InPort(shape=shape)
+        self.tv_in = InPort(shape=shape)
+
         self.u_out = OutPort(shape=self.out_shape)
         self.v_out = OutPort(shape=self.out_shape)
         self.d_out = OutPort(shape=self.out_shape)
         self.avg_out = OutPort(shape=self.out_shape)
         self.vth = Var(shape=(1,), init=vth)
+
+        self.initialize_weights()
+
+    def initialize_weights(self):
+        up_weights = utils.get_connection_up(self.out_shape)
+        down_weights = utils.get_connection_down(self.out_shape)
+        left_weights = utils.get_connection_left(self.out_shape)
+        right_weights = utils.get_connection_right(self.out_shape)
+
+        self.up_weights = Var(shape=self.out_shape, init=up_weights)
+        self.down_weights = Var(shape=self.out_shape, init=down_weights)
+        self.left_weights = Var(shape=self.out_shape, init=left_weights)
+        self.right_weights = Var(shape=self.out_shape, init=right_weights)
+        n_elems = self.out_shape[0] * self.out_shape[1]
+        conn_shape = (n_elems, n_elems)
+        self.trig_weights = Var(shape=(conn_shape), init=np.eye(n_elems, n_elems))
+
+        conv = Convolution(np.full((7, 7), 1.0))
+        conv.configure(self.out_shape)
+        conv_weights = conv._compute_weights() - np.eye(n_elems)
+        self.conv_avg_weights = Var(shape=conv_weights.shape, init=conv_weights)
 
 
 @implements(proc=Semd2dLayer, protocol=LoihiProtocol)
@@ -69,8 +92,14 @@ class Semd2dLayerModel(AbstractSubProcessModel):
         conv_stride = proc.init_args.get("conv_stride", (1, 1))
         thresh_conv = proc.init_args.get("thresh_conv", 0.5)
         vth = proc.init_args.get("vth", 0.9)
-        tu = proc.init_args.get("tu", (1,))
-        tv = proc.init_args.get("tv", (1,))
+
+        up_weights = proc.vars.up_weights
+        down_weights = proc.vars.down_weights
+        left_weights = proc.vars.left_weights
+        right_weights = proc.vars.right_weights
+        trig_weights = proc.vars.trig_weights
+        conv_avg_weights = proc.vars.conv_avg_weights
+        print(up_weights.shape)
 
         bias_weight = (1.0 / (conv_shape[0] * conv_shape[1])) / thresh_conv
         # convolution layer with reshape proc
@@ -80,8 +109,6 @@ class Semd2dLayerModel(AbstractSubProcessModel):
                                 bias_weight=bias_weight)
 
         out_shape = self.conv.out_shape
-        # the first and last column and the first and last row are removed.
-        detector_shape = (out_shape[0] - 2, out_shape[1] - 2)
         # connect the input to the convolution
         proc.in_ports.s_in.connect(self.conv.in_ports.s_in)
 
@@ -91,25 +118,20 @@ class Semd2dLayerModel(AbstractSubProcessModel):
         # conv to lif
         self.conv.s_out.connect(self.lif.a_in)
 
-        self.td = TDE2D(shape=out_shape, tu=tu, tv=tv)
+        self.td = TDE2D(shape=out_shape)
 
-        # removes columns and row from the lif to match the dimension of the time difference detector
-        # TODO change
+        proc.in_ports.tu_in.connect(self.td.t_u)
+        proc.in_ports.tv_in.connect(self.td.t_v)
+
         n_elems = out_shape[0] * out_shape[1]
         conn_shape = (n_elems, n_elems)
 
-        self.dense_up = Dense(shape=conn_shape, weights=utils.get_connection_up(out_shape), use_graded_spike=True)
-        self.dense_down = Dense(shape=conn_shape, weights=utils.get_connection_down(out_shape), use_graded_spike=True)
-        self.dense_left = Dense(shape=conn_shape, weights=utils.get_connection_left(out_shape), use_graded_spike=True)
-        self.dense_right = Dense(shape=conn_shape, weights=utils.get_connection_right(out_shape), use_graded_spike=True)
+        self.dense_up = Dense(shape=conn_shape, weights=up_weights, use_graded_spike=True)
+        self.dense_down = Dense(shape=conn_shape, weights=down_weights, use_graded_spike=True)
+        self.dense_left = Dense(shape=conn_shape, weights=left_weights, use_graded_spike=True)
+        self.dense_right = Dense(shape=conn_shape, weights=right_weights, use_graded_spike=True)
 
-        # self.change_dim_excit_up = ChangeDim(shape=(out_shape), col_del=[-1, 0], row_del=[0, 1])
-        # self.change_dim_excit_down = ChangeDim(shape=(out_shape), col_del=[-1, 0], row_del=[-1, -2])
-        # self.change_dim_excit_left = ChangeDim(shape=(out_shape), col_del=[0, 1], row_del=[-1, 0])
-        # self.change_dim_excit_right = ChangeDim(shape=(out_shape), col_del=[-1, -2], row_del=[-1, 0])
-
-        # self.change_dim_trig = ChangeDim(shape=out_shape, col_del=[0, -1], row_del=[0, -1])
-        self.dense_trig = Dense(shape=conn_shape, weights=np.eye(n_elems, n_elems), use_graded_spike=True)
+        self.dense_trig = Dense(shape=conn_shape, weights=trig_weights, use_graded_spike=True)
 
         self.lif.s_out.flatten().connect(self.dense_up.s_in)
         self.lif.s_out.flatten().connect(self.dense_down.s_in)
@@ -127,16 +149,13 @@ class Semd2dLayerModel(AbstractSubProcessModel):
 
         self.average_layer = AverageLayer(shape=out_shape, mean_thr=100)
 
-        self.dense_avg = Dense(shape=conn_shape, weights=np.eye(conn_shape[0]), use_graded_spike=True)
+        self.dense_avg = Dense(shape=conn_shape, weights=trig_weights, use_graded_spike=True)
 
         self.td.d_out.flatten().connect(self.dense_avg.s_in)
         self.dense_avg.a_out.reshape(out_shape).connect(self.average_layer.trig_in)
 
-        conv = Convolution(np.full((7, 7), 1.0))
-        conv.configure(out_shape)
-        conv_weights = conv._compute_weights() - np.eye(n_elems)
-        self.conv_dense = Dense(shape=conn_shape, weights=conv_weights, use_graded_spike=True)
-        self.n_conv_dense = Dense(shape=conn_shape, weights=conv_weights, use_graded_spike=True)
+        self.conv_dense = Dense(shape=conn_shape, weights=conv_avg_weights, use_graded_spike=True)
+        self.n_conv_dense = Dense(shape=conn_shape, weights=conv_avg_weights, use_graded_spike=True)
 
         self.average_layer.s_out.flatten().connect(self.conv_dense.s_in)
         self.conv_dense.a_out.reshape(out_shape).connect(self.average_layer.s_in)
