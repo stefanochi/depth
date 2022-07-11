@@ -19,6 +19,7 @@ class AverageLayer(AbstractProcess):
         super().__init__(**kwargs)
         shape = kwargs.get("shape", (1,))
         mean_thr = kwargs.get("mean_thr", 0.1)
+        min_meas = kwargs.get("min_meas", 1)
 
         self.s_in = InPort(shape=shape)
         self.n_in = InPort(shape=shape)
@@ -28,6 +29,7 @@ class AverageLayer(AbstractProcess):
         self.mean_thr = Var(shape=(1,), init=mean_thr)
         self.mean = Var(shape=shape, init=np.zeros(shape))
         self.samples = Var(shape=shape, init=np.zeros(shape))
+        self.min_meas = Var(shape=(1,), init=min_meas)
 
 
 @implements(proc=AverageLayer, protocol=LoihiProtocol)
@@ -42,6 +44,7 @@ class PyAverageLayerModelFloat(PyLoihiProcessModel):
     mean_thr: float = LavaPyType(float, float)
     mean: np.ndarray = LavaPyType(np.ndarray, float)
     samples: np.ndarray = LavaPyType(np.ndarray, float)
+    min_meas: float = LavaPyType(float, float)
 
     def run_spk(self):
         s_in_data = self.s_in.recv()
@@ -53,10 +56,10 @@ class PyAverageLayerModelFloat(PyLoihiProcessModel):
         self.mean[m] = ((self.mean[m] * self.samples[m]) + s_in_data[m]) / (self.samples[m] + n_in_data[m])
         self.samples[m] += n_in_data[m]
 
-        # check if the trig is close tho the mean
+        # check if the trig is close tho the mean, there must be more than min_samples
         m_trig = np.logical_or(
             np.logical_and(np.abs(self.mean - trig_in_data) < self.mean_thr, trig_in_data != 0.0),
-            np.logical_and(self.samples < 5, trig_in_data != 0.0))
+            np.logical_and(self.samples < self.min_meas, trig_in_data != 0.0))
 
         # if it is close, update the mean t´with the average
         self.mean[m_trig] = ((self.mean[m_trig] * self.samples[m_trig]) + trig_in_data[m_trig]) / (
