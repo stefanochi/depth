@@ -19,22 +19,20 @@ from semd.proc.camera_input.process import CameraInputLayer
 
 
 class LavaRunner(Runner):
-    def __init__(self, events, cam_poses, shape, camera_calib, timesteps):
+    def __init__(self, events, cam_poses, shape, camera_calib, timesteps, cfg):
         self.events = events
         self.cam_poses = cam_poses
-        self.shape = shape
+        self.shape = tuple(shape)
         self.camera_calib = camera_calib
-        self.timesteps = timesteps
+        self.timesteps = int(timesteps)
 
-        self.conv_stride = (1, 1)
-        self.conv_shape = (1, 1)
-        self.thresh_conv = 0.5  # threshold for the subsampling layer
-        self.avg_thresh = 50
-        self.avg_shape = (5, 5)
-        self.avg_min_meas = self.avg_shape[0]
-
-        self.tu = int(-186.19655666 / 2)
-        self.tv = 0
+        self.cfg = cfg
+        self.conv_stride = tuple(cfg["conv_stride"])
+        self.conv_shape = tuple(cfg["conv_shape"])
+        self.thresh_conv = cfg["thresh_conv"]  # threshold for the subsampling layer
+        self.avg_thresh = cfg["avg_thresh"]
+        self.avg_shape = tuple(cfg["avg_shape"])
+        self.avg_min_meas = cfg["avg_min_meas"]
 
         self.input_buffer = self.gen_input_data(self.events, self.shape, self.timesteps)
         self.vel_input_buffer = self.gen_cam_input_data(self.events, self.cam_poses, self.timesteps)
