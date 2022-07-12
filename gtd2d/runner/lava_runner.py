@@ -29,12 +29,15 @@ class LavaRunner(Runner):
         self.conv_stride = (1, 1)
         self.conv_shape = (1, 1)
         self.thresh_conv = 0.5  # threshold for the subsampling layer
+        self.avg_thresh = 50
+        self.avg_shape = (5, 5)
+        self.avg_min_meas = self.avg_shape[0]
 
         self.tu = int(-186.19655666 / 2)
         self.tv = 0
 
         self.input_buffer = self.gen_input_data(self.events, self.shape, self.timesteps)
-        self.vel_input_buffer = self.gen_cam_inout_data(self.events, self.cam_poses, self.timesteps)
+        self.vel_input_buffer = self.gen_cam_input_data(self.events, self.cam_poses, self.timesteps)
         return
 
     def gen_input_data(self, events, shape, timesteps):
@@ -57,7 +60,7 @@ class LavaRunner(Runner):
             events_buffer[y, x, time] = pol
         return events_buffer
 
-    def gen_cam_inout_data(self, events, poses, timesteps):
+    def gen_cam_input_data(self, events, poses, timesteps):
 
         t_start = events[0, 0]
         duration = events[-1, 0] - events[0, 0]
@@ -77,7 +80,9 @@ class LavaRunner(Runner):
         semd = Semd2dLayer(shape=self.shape,
                            conv_shape=self.conv_shape,
                            conv_stride=self.conv_stride,
-                           thresh_conv=self.thresh_conv)
+                           thresh_conv=self.thresh_conv,
+                           avg_thresh=self.avg_thresh,
+                           avg_conv_shape=self.avg_shape)
 
         cam_input = CameraInputLayer(shape=self.shape,
                                      focal_length=self.camera_calib[0],
@@ -85,7 +90,6 @@ class LavaRunner(Runner):
                                      center_y=self.camera_calib[3])
 
         out_shape = semd.out_shape
-        detector_shape = semd.detector_shape
 
         input_n = RingBuffer(self.input_buffer)
         input_cam = RingBuffer(self.vel_input_buffer)
