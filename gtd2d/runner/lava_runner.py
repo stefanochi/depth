@@ -97,6 +97,9 @@ class LavaRunner(Runner):
         output_d = SinkBuffer(shape=out_shape, buffer=self.timesteps)
         output_avg = SinkBuffer(shape=out_shape, buffer=self.timesteps)
         cam_output_x = SinkBuffer(shape=out_shape, buffer=self.timesteps)
+        # DEBUG
+        debug_output = SinkBuffer(shape=out_shape, buffer=self.timesteps)
+        avg_debug_output = SinkBuffer(shape=out_shape, buffer=self.timesteps)
 
         input_n.s_out.connect(semd.s_in)
         input_cam.s_out.connect(cam_input.s_in)
@@ -107,6 +110,9 @@ class LavaRunner(Runner):
         semd.avg_out.connect(output_avg.a_in)
         cam_input.x_out.connect(semd.tu_in)
         cam_input.y_out.connect(semd.tv_in)
+        # DEBUG
+        semd.debug_out.connect(debug_output.a_in)
+        semd.avg_debug.connect(avg_debug_output.a_in)
 
         rcnd = RunSteps(num_steps=self.timesteps)
         rcfg = LifRunConfig(select_tag='floating_pt')
@@ -116,6 +122,9 @@ class LavaRunner(Runner):
         data_v = output_v.data.get()
         data_d = output_d.data.get()
         data_avg = output_avg.data.get()
+        # DEBUG
+        data_debug = debug_output.data.get()
+        data_avg_debug = avg_debug_output.data.get()
 
         input_n.stop()
 
@@ -128,7 +137,10 @@ class LavaRunner(Runner):
             "mean_depths": np.moveaxis(data_avg, [2, 1, 0], [-3, -1, -2]) * step_t,
             "median_depths": None,
             "flow_u": np.moveaxis(data_u, [2, 1, 0], [-3, -1, -2]),
-            "flow_v": np.moveaxis(data_v, [2, 1, 0], [-3, -1, -2])
+            "flow_v": np.moveaxis(data_v, [2, 1, 0], [-3, -1, -2]),
+            # DEBUG
+            "debug": data_debug,
+            "avg_debug": data_avg_debug
         }
 
         return output

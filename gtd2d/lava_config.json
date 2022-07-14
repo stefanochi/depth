@@ -1,12 +1,14 @@
 {
-    "events_path" : "C:/Users/schiavaz/lava-nc/depth/data/esim_data/line_top/events.txt",
-    "poses_path" : "C:/Users/schiavaz/lava-nc/depth/data/esim_data/line_top/groundtruth.txt",
-    "calib_path" : "C:/Users/schiavaz/lava-nc/depth/data/esim_data/line_top/calib.txt",
-    "output_path" : "C:/Users/schiavaz/lava-nc/depth/data/esim_data/line_top/results/result.pkl",
+    "use_lava" : true,
+
+    "events_path" : "C:/Users/schiavaz/lava-nc/depth/data/esim_data/curvy/events.txt",
+    "poses_path" : "C:/Users/schiavaz/lava-nc/depth/data/esim_data/curvy/groundtruth.txt",
+    "calib_path" : "C:/Users/schiavaz/lava-nc/depth/data/esim_data/curvy/calib.txt",
+    "output_path" : "C:/Users/schiavaz/lava-nc/depth/data/esim_data/curvy/results/result.pkl",
 
     "dvs_shape" : [180, 240],
-    "time_range" : [2.0, 2.1],
-    "timesteps_second" : 1000,
+    "time_range" : [0.0, 3.0],
+    "timesteps_second" : 500,
     "refractory_period" : 0.1,
 
     "subsampling_factor" :  4,

@@ -22,6 +22,7 @@ def setup_lava(cfg):
     # Perform the event data subsampling
     # Can also be done in lava entirely
     # TODO verify that the result is the same
+    print("sub factor: {}".format(sub_factor))
     if sub_factor != 1:
         events, shape = filter.filter_conv(events, shape, factor=sub_factor)
         calib = calib / sub_factor
@@ -32,10 +33,10 @@ def setup_lava(cfg):
     sequence_duration = time_range[1] - time_range[0]
     runner = LavaRunner(events, poses, shape, calib, timesteps_second * sequence_duration, cfg)
     print("Runner initialized: ")
-    temp = vars(runner)
-    for item in temp:
-        print(item, ':', temp[item])
-
+    # temp = vars(runner)
+    # for item in temp:
+    #     print(item, ':', temp[item])
+    #
     return runner
 
 
@@ -50,12 +51,12 @@ def setup_python(p, run_lava=False):
     return
 
 
-def setup(cfg_file, run_lava=False):
+def setup(cfg_file):
     # load the config file
     with open(cfg_file) as f:
         cfg = json.load(f)
 
-    if run_lava:
+    if cfg["use_lava"]:
         return setup_lava(cfg)
     else:
         return setup_python(cfg)
@@ -64,7 +65,7 @@ def setup(cfg_file, run_lava=False):
 if __name__ == '__main__':
     assert len(sys.argv) > 1
     path = sys.argv[1]
-    runner = setup(path, run_lava=True)
+    runner = setup(path)
     out = runner.run()
 
     with open(runner.cfg["output_path"], 'wb') as f:

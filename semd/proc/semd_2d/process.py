@@ -60,7 +60,10 @@ class Semd2dLayer(AbstractProcess):
         self.d_out = OutPort(shape=self.out_shape)
         self.avg_out = OutPort(shape=self.out_shape)
         self.vth = Var(shape=(1,), init=vth)
-
+        # DEBUG
+        self.debug_out = OutPort(shape=self.out_shape)
+        self.avg_debug = OutPort(shape=self.out_shape)
+        # DEBUG
         self.initialize_weights()
         self.initialize_conv_weights(avg_conv_shape)
 
@@ -167,6 +170,10 @@ class Semd2dLayerModel(AbstractSubProcessModel):
         self.conv_dense.a_out.reshape(out_shape).connect(self.average_layer.s_in)
         self.average_layer.n_out.flatten().connect(self.n_conv_dense.s_in)
         self.n_conv_dense.a_out.reshape(out_shape).connect(self.average_layer.n_in)
+        # DEBUG
+        self.average_layer.debug_out.connect(proc.out_ports.debug_out)
+        self.average_layer.avg_debug.connect(proc.out_ports.avg_debug)
+        # DEBUG
 
         # connect the outputs
         self.td.u_out.connect(proc.out_ports.u_out)
