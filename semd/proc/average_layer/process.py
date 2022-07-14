@@ -26,6 +26,7 @@ class AverageLayer(AbstractProcess):
         self.trig_in = InPort(shape=shape)
         self.s_out = OutPort(shape=shape)
         self.n_out = OutPort(shape=shape)
+        self.avg_out = OutPort(shape=shape)
         # DEBUG
         self.debug_out = OutPort(shape=shape)
         self.avg_debug = OutPort(shape=shape)
@@ -45,6 +46,7 @@ class PyAverageLayerModelFloat(PyLoihiProcessModel):
     trig_in: PyInPort = LavaPyType(PyInPort.VEC_DENSE, float)
     s_out: PyOutPort = LavaPyType(PyOutPort.VEC_DENSE, float)
     n_out: PyOutPort = LavaPyType(PyOutPort.VEC_DENSE, float)
+    avg_out: PyOutPort = LavaPyType(PyOutPort.VEC_DENSE, float)
     # DEBUG
     debug_out: PyOutPort = LavaPyType(PyOutPort.VEC_DENSE, float)
     avg_debug: PyOutPort = LavaPyType(PyOutPort.VEC_DENSE, float)
@@ -62,7 +64,7 @@ class PyAverageLayerModelFloat(PyLoihiProcessModel):
         m = s_in_data != 0.0
         # self.mean[m] = ((self.mean[m] * self.samples[m]) + s_in_data[m]) / (self.samples[m] + n_in_data[m])
         self.mean[m] += 0.5 * ((s_in_data[m] / n_in_data[m]) - self.mean[m])
-        self.samples[m] += 1 # n_in_data[m]
+        self.samples[m] += n_in_data[m]
         # DEBUG
         # create list of inputs
         input_list = np.zeros_like(s_in_data)
@@ -79,10 +81,11 @@ class PyAverageLayerModelFloat(PyLoihiProcessModel):
                 self.samples[m_trig] + 1)
         self.samples[m_trig] += 1
 
-        s_out_data = trig_in_data * m_trig
-        n_out_data = np.full(self.mean.shape, 1.0) * m_trig
+        s_out_data = self.mean * m_trig
+        n_out_data = np.full(self.mean.shape, 1.0) * (trig_in_data != 0.0)
         self.s_out.send(s_out_data)
         self.n_out.send(n_out_data)
+        self.avg_out.send(trig_in_data)
         # DEBUG
         self.debug_out.send(input_list)
         self.avg_debug.send(self.mean)

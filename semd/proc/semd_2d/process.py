@@ -166,7 +166,8 @@ class Semd2dLayerModel(AbstractSubProcessModel):
         # recurrent connection in the average layer. Implemented as a convolution
         self.conv_dense = Dense(shape=conn_shape, weights=conv_avg_weights, use_graded_spike=True)
         self.n_conv_dense = Dense(shape=conn_shape, weights=conv_avg_weights, use_graded_spike=True)
-        self.average_layer.s_out.flatten().connect(self.conv_dense.s_in)
+
+        self.average_layer.avg_out.flatten().connect(self.conv_dense.s_in)
         self.conv_dense.a_out.reshape(out_shape).connect(self.average_layer.s_in)
         self.average_layer.n_out.flatten().connect(self.n_conv_dense.s_in)
         self.n_conv_dense.a_out.reshape(out_shape).connect(self.average_layer.n_in)
