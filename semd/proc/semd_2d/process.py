@@ -41,6 +41,7 @@ class Semd2dLayer(AbstractProcess):
         avg_thresh = kwargs.pop("avg_thresh", 50)
         avg_min_meas = kwargs.pop("avg_min_meas", 5)
         avg_conv_shape = kwargs.pop("avg_conv_shape", (5, 5))
+        avg_alpha = kwargs.pop("avg_alpha", 0.5)
 
         bias_weight = vth / conv_shape[0] * conv_shape[1] * thresh_conv
         # convolution layer with reshape proc
@@ -103,6 +104,7 @@ class Semd2dLayerModel(AbstractSubProcessModel):
         vth = proc.init_args.get("vth", 0.9)
         avg_thresh = proc.init_args.get("avg_thresh", 50)
         avg_min_meas = proc.init_args.get("avg_min_meas", 1)
+        avg_alpha = proc.init_args.get("avg_alpha", 0.5)
 
         up_weights = proc.vars.up_weights.init
         down_weights = proc.vars.down_weights.init
@@ -158,7 +160,7 @@ class Semd2dLayerModel(AbstractSubProcessModel):
         self.dense_trig.a_out.reshape(out_shape).connect(self.td.trig_in)
 
         # Average Layer
-        self.average_layer = AverageLayer(shape=out_shape, mean_thr=avg_thresh, min_meas=avg_min_meas)
+        self.average_layer = AverageLayer(shape=out_shape, mean_thr=avg_thresh, min_meas=avg_min_meas, avg_alpha=avg_alpha)
         # dense connections, the connection here is simply a 1two1
         self.dense_avg = Dense(shape=conn_shape, weights=trig_weights, use_graded_spike=True)
         self.td.d_out.flatten().connect(self.dense_avg.s_in)

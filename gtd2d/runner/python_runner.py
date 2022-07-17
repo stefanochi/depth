@@ -8,21 +8,21 @@ class PythonRunner(Runner):
     """Parameters for the execution:
         y"""
 
-    def __init__(self, events, cam_poses, shape, chunk_size, camera_calib):
+    def __init__(self, events, cam_poses, shape, chunk_size, camera_calib, cfg):
         # TODO move to cfg file
         self.events = events
         self.cam_poses = cam_poses
         self.shape = shape
         self.chunk_size = chunk_size
         self.camera_calib = camera_calib
+        self.cfg = cfg
 
         self.last_time = np.full(shape, -1.0)
         self.event_sign = np.full(shape, -1)
 
-        self.filter_size = 15
-        self.mean_thresh = 0.5
+        self.filter_size = cfg["avg_shape"][0]
+        self.mean_thresh = cfg["avg_thresh"]
         self.filter_time_dim = 0.05
-
         return
 
     def run(self):
@@ -43,16 +43,16 @@ class PythonRunner(Runner):
             # compute the time difference for all the elements in the chunk
             # the time surface is maintained between chunks
             td = self.compute_td(events_chunk, self.shape)
-            # flow_u[i] = td[0]
-            # flow_v[i] = td[1]
+            flow_u[i] = td[0]
+            flow_v[i] = td[1]
 
             cam_vel = flow_utils.vel_at_time(self.cam_poses, chunk_time)
             at = flow_utils.get_translational_flow(cam_vel[1:4],
                                                    self.camera_calib[0],
                                                    [self.camera_calib[2], self.camera_calib[3]],
                                                    self.shape)
-            flow_u[i] = at[0]
-            flow_v[i] = at[1]
+            # flow_u[i] = at[0]
+            # flow_v[i] = at[1]
 
             raw_depth = self.compute_depth(td, at)
             raw_depths[i] = raw_depth

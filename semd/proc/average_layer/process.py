@@ -20,6 +20,7 @@ class AverageLayer(AbstractProcess):
         shape = kwargs.get("shape", (1,))
         mean_thr = kwargs.get("mean_thr", 0.1)
         min_meas = kwargs.get("min_meas", 1)
+        avg_alpha = kwargs.get("avg_alpha", 0.25)
 
         self.s_in = InPort(shape=shape)
         self.n_in = InPort(shape=shape)
@@ -35,6 +36,7 @@ class AverageLayer(AbstractProcess):
         self.mean = Var(shape=shape, init=np.zeros(shape))
         self.samples = Var(shape=shape, init=np.zeros(shape))
         self.min_meas = Var(shape=(1,), init=min_meas)
+        self.avg_alpha = Var(shape=(1,), init=avg_alpha)
 
 
 @implements(proc=AverageLayer, protocol=LoihiProtocol)
@@ -55,6 +57,7 @@ class PyAverageLayerModelFloat(PyLoihiProcessModel):
     mean: np.ndarray = LavaPyType(np.ndarray, float)
     samples: np.ndarray = LavaPyType(np.ndarray, float)
     min_meas: float = LavaPyType(float, float)
+    avg_alpha: float = LavaPyType(float, float)
 
     def run_spk(self):
         s_in_data = self.s_in.recv()
@@ -63,7 +66,7 @@ class PyAverageLayerModelFloat(PyLoihiProcessModel):
         # filter out the outliers
         m = s_in_data != 0.0
         # self.mean[m] = ((self.mean[m] * self.samples[m]) + s_in_data[m]) / (self.samples[m] + n_in_data[m])
-        self.mean[m] += 0.5 * ((s_in_data[m] / n_in_data[m]) - self.mean[m])
+        self.mean[m] += self.avg_alpha * ((s_in_data[m] / n_in_data[m]) - self.mean[m])
         self.samples[m] += n_in_data[m]
         # DEBUG
         # create list of inputs

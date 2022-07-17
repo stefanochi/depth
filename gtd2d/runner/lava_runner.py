@@ -140,7 +140,8 @@ class LavaRunner(Runner):
             "flow_v": np.moveaxis(data_v, [2, 1, 0], [-3, -1, -2]),
             # DEBUG
             "debug": data_debug,
-            "avg_debug": data_avg_debug
+            "avg_debug": data_avg_debug,
+            "events": self.events
         }
 
         return output
