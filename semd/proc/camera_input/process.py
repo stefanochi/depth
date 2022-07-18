@@ -55,3 +55,27 @@ class PyCameraInputLayerModelFloat(PyLoihiProcessModel):
 
         self.x_out.send(x_out_data)
         self.y_out.send(y_out_data)
+
+
+@implements(proc=CameraInputLayer, protocol=LoihiProtocol)
+@requires(CPU)
+@tag('fixed_pt')
+class PyCameraInputLayerModelFixed(PyLoihiProcessModel):
+    s_in: PyInPort = LavaPyType(PyInPort.VEC_DENSE, float)
+    x_out: PyOutPort = LavaPyType(PyOutPort.VEC_DENSE, np.int32, precision=16)
+    y_out: PyOutPort = LavaPyType(PyOutPort.VEC_DENSE, np.int32, precision=16)
+    focal_length: float = LavaPyType(float, float)
+    px: np.ndarray = LavaPyType(np.ndarray, float)
+    py: np.ndarray = LavaPyType(np.ndarray, float)
+
+    def run_spk(self):
+        s_in_data = self.s_in.recv()
+
+        x_out_data = self.px * s_in_data[2] - self.focal_length * s_in_data[0]
+        y_out_data = self.py * s_in_data[2] - self.focal_length * s_in_data[1]
+
+        x_out_data = x_out_data.astype(np.int32)
+        y_out_data = y_out_data.astype(np.int32)
+
+        self.x_out.send(x_out_data)
+        self.y_out.send(y_out_data)

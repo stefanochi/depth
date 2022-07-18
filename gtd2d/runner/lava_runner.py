@@ -16,6 +16,7 @@ from lava.magma.core.run_conditions import RunSteps
 
 from semd.proc.semd_2d.process import Semd2dLayer
 from semd.proc.camera_input.process import CameraInputLayer
+from semd.proc.float_input.process import RingBuffer as FloatInput
 
 
 class LavaRunner(Runner):
@@ -90,7 +91,7 @@ class LavaRunner(Runner):
         out_shape = semd.out_shape
 
         input_n = RingBuffer(self.input_buffer)
-        input_cam = RingBuffer(self.vel_input_buffer)
+        input_cam = FloatInput(self.vel_input_buffer)
 
         output_u = SinkBuffer(shape=out_shape, buffer=self.timesteps)
         output_v = SinkBuffer(shape=out_shape, buffer=self.timesteps)
@@ -104,20 +105,23 @@ class LavaRunner(Runner):
         input_n.s_out.connect(semd.s_in)
         input_cam.s_out.connect(cam_input.s_in)
 
-        semd.u_out.connect(output_u.a_in)
-        semd.v_out.connect(output_v.a_in)
+        # semd.u_out.connect(output_u.a_in)
+        # semd.v_out.connect(output_v.a_in)
         semd.d_out.connect(output_d.a_in)
-        semd.avg_out.connect(output_avg.a_in)
+        # semd.avg_out.connect(output_avg.a_in)
         cam_input.x_out.connect(semd.tu_in)
         cam_input.y_out.connect(semd.tv_in)
         # DEBUG
-        semd.debug_out.connect(debug_output.a_in)
-        semd.avg_debug.connect(avg_debug_output.a_in)
+        # semd.debug_out.connect(debug_output.a_in)
+        # semd.avg_debug.connect(avg_debug_output.a_in)
 
-        rcnd = RunSteps(num_steps=self.timesteps)
-        rcfg = LifRunConfig(select_tag='floating_pt')
-        semd.run(condition=rcnd, run_cfg=rcfg)
+        rcnd = RunSteps(num_steps=100)
+        rcfg = LifRunConfig(select_tag='fixed_pt')
+        for t in tqdm(range(int(self.timesteps / 100))):
+            #print("t: {}/{}".format(t*100, self.timesteps))
+            semd.run(condition=rcnd, run_cfg=rcfg)
 
+        print("retrieving the data...")
         data_u = output_u.data.get()
         data_v = output_v.data.get()
         data_d = output_d.data.get()
@@ -159,4 +163,4 @@ class LifRunConfig(RunConfig):
         for pm in proc_models:
             if self.select_tag in pm.tags:
                 return pm
-        raise AssertionError("No legal ProcessModel found.")
+        raise AssertionError("No legal ProcessModel found: {}".format(pm))

@@ -18,8 +18,8 @@ from lava.magma.core.resources import CPU
 class ReshapeConv(AbstractProcess):
     """sEMD
     """
-    def __init__(self, **kwargs):
 
+    def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
         input_shape = kwargs.pop("input_shape", (1, 1))
@@ -44,9 +44,10 @@ class ReshapeConv(AbstractProcess):
         self.weights = Var(shape=conv_shape, init=weights)
         self.s_out = OutPort(shape=self.out_shape)
 
+
 @implements(proc=ReshapeConv, protocol=LoihiProtocol)
 @requires(CPU)
-@tag('floating_pt')
+@tag('floating_pt', 'fixed_pt')
 class ReshapeConvModel(AbstractSubProcessModel):
 
     def __init__(self, proc):
@@ -55,14 +56,14 @@ class ReshapeConvModel(AbstractSubProcessModel):
         # input shape is a 2D vec (shape of weight mat)
         input_shape = proc.init_args.get("input_shape", (1, 1))
         conv_shape = proc.init_args.get("conv_shape", (3, 3))
-        weights = proc.init_args.get("weights", np.ones((conv_shape)))
+        weights = proc.vars.weights.get()
         conv_stride = proc.init_args.get("conv_stride", (3, 3))
         bias_weight = proc.init_args.get("bias_weight", 1)
         conv_padding = proc.init_args.get("conv_padding", (0, 0))
 
-        #self.out_shape = (int(input_shape[0]/conv_stride[0]), int(input_shape[1]/conv_stride[1]))
+        # self.out_shape = (int(input_shape[0]/conv_stride[0]), int(input_shape[1]/conv_stride[1]))
         conv_weights = np.zeros((1, conv_shape[0], conv_shape[1], 1))
-        conv_weights[0, :, : , 0] = weights * bias_weight
+        conv_weights[0, :, :, 0] = weights * bias_weight
 
         self.conv = Conv(
             input_shape=(input_shape[0], input_shape[1], 1),
@@ -73,6 +74,6 @@ class ReshapeConvModel(AbstractSubProcessModel):
         )
         self.out_shape = (self.conv.output_shape[0], self.conv.output_shape[1])
 
-        #connect the processes together
+        # connect the processes together
         proc.in_ports.s_in.reshape((input_shape[0], input_shape[1], 1)).connect(self.conv.in_ports.s_in)
         self.conv.out_ports.a_out.reshape(self.out_shape).connect(proc.out_ports.s_out)

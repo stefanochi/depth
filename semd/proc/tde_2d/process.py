@@ -23,8 +23,6 @@ class TDE2D(AbstractProcess):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         shape = kwargs.get("shape", (1,))
-        tu = kwargs.get("tu", (1,))
-        tv = kwargs.get("tv", (1,))
 
         self.shape = shape
 
@@ -45,7 +43,7 @@ class TDE2D(AbstractProcess):
 
 @implements(proc=TDE2D, protocol=LoihiProtocol)
 @requires(CPU)
-@tag('floating_pt')
+@tag('floating_pt', 'fixed_pt')
 class PyTde2dModelFloat(AbstractSubProcessModel):
     """
     """
