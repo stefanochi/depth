@@ -6,6 +6,7 @@ from data_loader import filter
 import pickle
 import json
 import sys
+import time
 
 
 def load_data(cfg):
@@ -41,6 +42,7 @@ def setup_lava(cfg):
     timesteps_second = cfg["timesteps_second"]
 
     sequence_duration = events[-1, 0] - events[0, 0]
+    print("sequqnece duration: ", sequence_duration)
     runner = LavaRunner(events, poses, shape, calib, timesteps_second * sequence_duration, cfg)
     print("Runner initialized: ")
     return runner
@@ -72,7 +74,11 @@ if __name__ == '__main__':
     path = sys.argv[1]
     runner = setup(path)
     #try:
+    start_time = time.time()
     out = runner.run()
+    end_time = time.time()
+
+    print("run time: {}".format(end_time - start_time))
     #except Exception as e:
      #   print(e)
 

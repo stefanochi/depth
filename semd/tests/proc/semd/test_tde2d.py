@@ -81,6 +81,24 @@ class PyVecSendModelFloat(PyLoihiProcessModel):
         else:
             self.s_out.send(np.zeros_like(self.vec_to_send))
 
+@implements(proc=VecSendProcess, protocol=LoihiProtocol)
+@requires(CPU)
+# need the following tag to discover the ProcessModel using LifRunConfig
+@tag('fixed_pt')
+class PyVecSendModelFixed(PyLoihiProcessModel):
+    s_out: PyOutPort = LavaPyType(PyOutPort.VEC_DENSE, np.int32)
+    vec_to_send: np.ndarray = LavaPyType(np.ndarray, np.int32)
+    send_at_times: np.ndarray = LavaPyType(np.ndarray, bool, precision=1)
+
+    def run_spk(self):
+        """
+        Send `spikes_to_send` if current time-step requires it
+        """
+        if self.send_at_times[self.time_step - 1]:
+            self.s_out.send(self.vec_to_send)
+        else:
+            self.s_out.send(np.zeros_like(self.vec_to_send))
+
 
 class VecRecvProcess(AbstractProcess):
     """
@@ -113,10 +131,24 @@ class PySpkRecvModelFloat(PyLoihiProcessModel):
         spk_in = self.s_in.recv()
         self.spk_data[self.time_step - 1, :] = spk_in
 
+@implements(proc=VecRecvProcess, protocol=LoihiProtocol)
+@requires(CPU)
+# need the following tag to discover the ProcessModel using LifRunConfig
+@tag('fixed_pt')
+class PySpkRecvModelFixed(PyLoihiProcessModel):
+    s_in: PyInPort = LavaPyType(PyInPort.VEC_DENSE, np.int32)
+    spk_data: np.ndarray = LavaPyType(np.ndarray, np.int32)
+
+    def run_spk(self):
+        """Receive spikes and store in an internal variable"""
+        spk_in = self.s_in.recv()
+        self.spk_data[self.time_step - 1, :] = spk_in
+
+
 
 class TestTd2d(unittest.TestCase):
 
-    def test_xy_positive(self):
+    def test_xy_positive_floating(self):
         """
         Test the time difference output when both x and y
         are moving in the positive direction (up and to the right)
@@ -194,7 +226,85 @@ class TestTd2d(unittest.TestCase):
         self.assertTrue(np.all(expected_out_v == v_data), msg="{0}".format(v_data))
         self.assertTrue(np.all(expected_out_u == u_data), msg="{0}".format(u_data))
 
-    def test_xy_negative(self):
+    def test_xy_positive_fixed(self):
+        """
+        Test the time difference output when both x and y
+        are moving in the positive direction (up and to the right)
+        """
+        shape = (3, 3)
+        num_steps = 10
+
+        td2d = TDE2D(shape=shape)
+
+        up_times = np.zeros((num_steps,), dtype=bool)
+        up_times[2] = True
+        up_snd = VecSendProcess(shape=shape, num_steps=num_steps,
+                                vec_to_send=np.ones(shape, dtype=np.int32),
+                                send_at_times=up_times)
+        down_times = np.zeros((num_steps,), dtype=bool)
+        down_snd = VecSendProcess(shape=shape, num_steps=num_steps,
+                                  vec_to_send=np.ones(shape, dtype=np.int32),
+                                  send_at_times=down_times)
+        right_times = np.zeros((num_steps,), dtype=bool)
+        right_times[4] = True
+        right_snd = VecSendProcess(shape=shape, num_steps=num_steps,
+                                   vec_to_send=np.ones(shape, dtype=np.int32),
+                                   send_at_times=right_times)
+
+        left_snd = VecSendProcess(shape=shape, num_steps=num_steps,
+                                  vec_to_send=np.ones(shape, dtype=np.int32),
+                                  send_at_times=np.zeros(num_steps))
+
+        trig_times = np.zeros((num_steps,), dtype=bool)
+        trig_times[5] = True
+        trig_snd = VecSendProcess(shape=shape, num_steps=num_steps,
+                                  vec_to_send=np.ones(shape, dtype=np.int32),
+                                  send_at_times=trig_times)
+
+        tx_times = np.ones((num_steps,), dtype=bool)
+        tx_snd = VecSendProcess(shape=shape, num_steps=num_steps,
+                                vec_to_send=np.ones(shape, dtype=np.int32),
+                                send_at_times=tx_times)
+
+        ty_times = np.ones((num_steps,), dtype=bool)
+        ty_snd = VecSendProcess(shape=shape, num_steps=num_steps,
+                                vec_to_send=np.ones(shape, dtype=np.int32),
+                                send_at_times=ty_times)
+
+        u_rcv = VecRecvProcess(shape_in=shape, num_steps=num_steps)
+        v_rcv = VecRecvProcess(shape_in=shape, num_steps=num_steps)
+
+        up_snd.s_out.connect(td2d.up_in)
+        down_snd.s_out.connect(td2d.down_in)
+        left_snd.s_out.connect(td2d.left_in)
+        right_snd.s_out.connect(td2d.right_in)
+
+        tx_snd.s_out.connect(td2d.t_u)
+        ty_snd.s_out.connect(td2d.t_v)
+
+        trig_snd.s_out.connect(td2d.trig_in)
+
+        td2d.u_out.connect(u_rcv.s_in)
+        td2d.v_out.connect(v_rcv.s_in)
+        # Configure execution and run
+        rcnd = RunSteps(num_steps=num_steps)
+        rcfg = LifRunConfig(select_tag='fixed_pt')
+        td2d.run(condition=rcnd, run_cfg=rcfg)
+        # Gather spike data and stop
+        u_data = u_rcv.spk_data.get().astype(np.int32)
+        v_data = v_rcv.spk_data.get().astype(np.int32)
+        td2d.stop()
+
+        expected_out_v = np.zeros((num_steps, shape[0], shape[1]), dtype=np.int32)
+        expected_out_v[5, :] = 3
+
+        expected_out_u = np.zeros((num_steps, shape[0], shape[1]), dtype=np.int32)
+        expected_out_u[5, :] = 1
+
+        self.assertTrue(np.all(expected_out_v == v_data), msg="{0}".format(v_data))
+        self.assertTrue(np.all(expected_out_u == u_data), msg="{0}".format(u_data))
+
+    def test_xy_negative_floating(self):
         """
         Test the time difference output when both x and y
         are moving in the negative direction (down and to the left)
@@ -272,7 +382,85 @@ class TestTd2d(unittest.TestCase):
         self.assertTrue(np.all(expected_out_v == v_data), msg="{0}".format(v_data))
         self.assertTrue(np.all(expected_out_u == u_data), msg="{0}".format(u_data))
 
-    def test_trig_before(self):
+    def test_xy_negative_fixed(self):
+        """
+        Test the time difference output when both x and y
+        are moving in the negative direction (down and to the left)
+        """
+        shape = (3, 3)
+        num_steps = 10
+
+        td2d = TDE2D(shape=shape)
+
+        up_times = np.zeros((num_steps,), dtype=bool)
+        up_snd = VecSendProcess(shape=shape, num_steps=num_steps,
+                                vec_to_send=np.ones(shape, dtype=np.int32),
+                                send_at_times=up_times)
+        down_times = np.zeros((num_steps,), dtype=bool)
+        down_times[2] = True
+        down_snd = VecSendProcess(shape=shape, num_steps=num_steps,
+                                  vec_to_send=np.ones(shape, dtype=np.int32),
+                                  send_at_times=down_times)
+        right_times = np.zeros((num_steps,), dtype=bool)
+        right_snd = VecSendProcess(shape=shape, num_steps=num_steps,
+                                   vec_to_send=np.ones(shape, dtype=np.int32),
+                                   send_at_times=right_times)
+        left_times = np.zeros((num_steps,))
+        left_times[4] = True
+        left_snd = VecSendProcess(shape=shape, num_steps=num_steps,
+                                  vec_to_send=np.ones(shape, dtype=np.int32),
+                                  send_at_times=left_times)
+
+        trig_times = np.zeros((num_steps,), dtype=bool)
+        trig_times[5] = True
+        trig_snd = VecSendProcess(shape=shape, num_steps=num_steps,
+                                  vec_to_send=np.ones(shape, dtype=np.int32),
+                                  send_at_times=trig_times)
+
+        tx_times = np.ones((num_steps,), dtype=bool)
+        tx_snd = VecSendProcess(shape=shape, num_steps=num_steps,
+                                vec_to_send=np.ones(shape, dtype=np.int32),
+                                send_at_times=tx_times)
+
+        ty_times = np.ones((num_steps,), dtype=bool)
+        ty_snd = VecSendProcess(shape=shape, num_steps=num_steps,
+                                vec_to_send=np.ones(shape, dtype=np.int32),
+                                send_at_times=ty_times)
+
+        u_rcv = VecRecvProcess(shape_in=shape, num_steps=num_steps)
+        v_rcv = VecRecvProcess(shape_in=shape, num_steps=num_steps)
+
+        up_snd.s_out.connect(td2d.up_in)
+        down_snd.s_out.connect(td2d.down_in)
+        left_snd.s_out.connect(td2d.left_in)
+        right_snd.s_out.connect(td2d.right_in)
+
+        tx_snd.s_out.connect(td2d.t_u)
+        ty_snd.s_out.connect(td2d.t_v)
+
+        trig_snd.s_out.connect(td2d.trig_in)
+
+        td2d.u_out.connect(u_rcv.s_in)
+        td2d.v_out.connect(v_rcv.s_in)
+        # Configure execution and run
+        rcnd = RunSteps(num_steps=num_steps)
+        rcfg = LifRunConfig(select_tag='fixed_pt')
+        td2d.run(condition=rcnd, run_cfg=rcfg)
+        # Gather spike data and stop
+        u_data = u_rcv.spk_data.get().astype(np.int32)
+        v_data = v_rcv.spk_data.get().astype(np.int32)
+        td2d.stop()
+
+        expected_out_v = np.zeros((num_steps, shape[0], shape[1]), dtype=np.int32)
+        expected_out_v[5, :] = -3
+
+        expected_out_u = np.zeros((num_steps, shape[0], shape[1]), dtype=np.int32)
+        expected_out_u[5, :] = -1
+
+        self.assertTrue(np.all(expected_out_v == v_data), msg="{0}".format(v_data))
+        self.assertTrue(np.all(expected_out_u == u_data), msg="{0}".format(u_data))
+
+    def test_trig_before_floating(self):
         """
         Test the time difference output when the trigger
         is received before the any other spike or at the same timestep.
@@ -353,7 +541,88 @@ class TestTd2d(unittest.TestCase):
         self.assertTrue(np.all(expected_out_v == v_data), msg="{0}".format(v_data))
         self.assertTrue(np.all(expected_out_u == u_data), msg="{0}".format(u_data))
 
-    def test_negative_events(self):
+    def test_trig_before_fixed(self):
+        """
+        Test the time difference output when the trigger
+        is received before the any other spike or at the same timestep.
+        If the two spikes arrive at the same timestep, the counter should not start
+        """
+        shape = (3, 3)
+        num_steps = 10
+
+        td2d = TDE2D(shape=shape)
+
+        up_times = np.zeros((num_steps,), dtype=bool)
+        up_snd = VecSendProcess(shape=shape, num_steps=num_steps,
+                                vec_to_send=np.ones(shape, dtype=np.int32),
+                                send_at_times=up_times)
+        down_times = np.zeros((num_steps,), dtype=bool)
+        down_times[2] = True
+        down_snd = VecSendProcess(shape=shape, num_steps=num_steps,
+                                  vec_to_send=np.ones(shape, dtype=np.int32),
+                                  send_at_times=down_times)
+        right_times = np.zeros((num_steps,), dtype=bool)
+        right_times[2] = True
+        right_snd = VecSendProcess(shape=shape, num_steps=num_steps,
+                                   vec_to_send=np.ones(shape, dtype=np.int32),
+                                   send_at_times=right_times)
+        left_times = np.zeros((num_steps,))
+        left_times[2] = True
+        left_snd = VecSendProcess(shape=shape, num_steps=num_steps,
+                                  vec_to_send=np.ones(shape, dtype=np.int32),
+                                  send_at_times=left_times)
+
+        trig_times = np.zeros((num_steps,), dtype=bool)
+        trig_times[2] = True
+        trig_times[5] = True
+        trig_snd = VecSendProcess(shape=shape, num_steps=num_steps,
+                                  vec_to_send=np.ones(shape, dtype=np.int32),
+                                  send_at_times=trig_times)
+
+        tx_times = np.ones((num_steps,), dtype=bool)
+        tx_snd = VecSendProcess(shape=shape, num_steps=num_steps,
+                                vec_to_send=np.ones(shape, dtype=np.int32),
+                                send_at_times=tx_times)
+
+        ty_times = np.ones((num_steps,), dtype=bool)
+        ty_snd = VecSendProcess(shape=shape, num_steps=num_steps,
+                                vec_to_send=np.ones(shape, dtype=np.int32),
+                                send_at_times=ty_times)
+
+        u_rcv = VecRecvProcess(shape_in=shape, num_steps=num_steps)
+        v_rcv = VecRecvProcess(shape_in=shape, num_steps=num_steps)
+
+        up_snd.s_out.connect(td2d.up_in)
+        down_snd.s_out.connect(td2d.down_in)
+        left_snd.s_out.connect(td2d.left_in)
+        right_snd.s_out.connect(td2d.right_in)
+
+        tx_snd.s_out.connect(td2d.t_u)
+        ty_snd.s_out.connect(td2d.t_v)
+
+        trig_snd.s_out.connect(td2d.trig_in)
+
+        td2d.u_out.connect(u_rcv.s_in)
+        td2d.v_out.connect(v_rcv.s_in)
+        # Configure execution and run
+        rcnd = RunSteps(num_steps=num_steps)
+        rcfg = LifRunConfig(select_tag='fixed_pt')
+        td2d.run(condition=rcnd, run_cfg=rcfg)
+        # Gather spike data and stop
+        u_data = u_rcv.spk_data.get().astype(np.int32)
+        v_data = v_rcv.spk_data.get().astype(np.int32)
+        td2d.stop()
+
+        expected_out_v = np.zeros((num_steps, shape[0], shape[1]), dtype=np.int32)
+        expected_out_v[5, :] = 0
+
+        expected_out_u = np.zeros((num_steps, shape[0], shape[1]), dtype=np.int32)
+        expected_out_u[5, :] = 0
+
+        self.assertTrue(np.all(expected_out_v == v_data), msg="{0}".format(v_data))
+        self.assertTrue(np.all(expected_out_u == u_data), msg="{0}".format(u_data))
+
+    def test_negative_events_floating(self):
         """
         Test the output of the network when the input spikes are negative.
         The sign of the input should not influence the sign of the output
@@ -430,7 +699,84 @@ class TestTd2d(unittest.TestCase):
         self.assertTrue(np.all(expected_out_v == v_data), msg="{0}".format(v_data))
         self.assertTrue(np.all(expected_out_u == u_data), msg="{0}".format(u_data))
 
-    def test_different_polarity(self):
+    def test_negative_events_fixed(self):
+        """
+        Test the output of the network when the input spikes are negative.
+        The sign of the input should not influence the sign of the output
+        """
+        shape = (3, 3)
+        num_steps = 10
+
+        td2d = TDE2D(shape=shape)
+
+        up_times = np.zeros((num_steps,), dtype=bool)
+        up_times[2] = True
+        up_snd = VecSendProcess(shape=shape, num_steps=num_steps,
+                                vec_to_send=np.full(shape, -1.0, dtype=np.int32),
+                                send_at_times=up_times)
+        down_times = np.zeros((num_steps,), dtype=bool)
+        down_snd = VecSendProcess(shape=shape, num_steps=num_steps,
+                                  vec_to_send=np.ones(shape, dtype=np.int32),
+                                  send_at_times=down_times)
+        right_times = np.zeros((num_steps,), dtype=bool)
+        right_snd = VecSendProcess(shape=shape, num_steps=num_steps,
+                                   vec_to_send=np.ones(shape, dtype=np.int32),
+                                   send_at_times=right_times)
+        left_times = np.zeros((num_steps,))
+        left_snd = VecSendProcess(shape=shape, num_steps=num_steps,
+                                  vec_to_send=np.ones(shape, dtype=np.int32),
+                                  send_at_times=left_times)
+
+        trig_times = np.zeros((num_steps,), dtype=bool)
+        trig_times[4] = True
+        trig_snd = VecSendProcess(shape=shape, num_steps=num_steps,
+                                  vec_to_send=np.full(shape, -1.0, dtype=np.int32),
+                                  send_at_times=trig_times)
+
+        tx_times = np.ones((num_steps,), dtype=bool)
+        tx_snd = VecSendProcess(shape=shape, num_steps=num_steps,
+                                vec_to_send=np.ones(shape, dtype=np.int32),
+                                send_at_times=tx_times)
+
+        ty_times = np.ones((num_steps,), dtype=bool)
+        ty_snd = VecSendProcess(shape=shape, num_steps=num_steps,
+                                vec_to_send=np.ones(shape, dtype=np.int32),
+                                send_at_times=ty_times)
+
+        u_rcv = VecRecvProcess(shape_in=shape, num_steps=num_steps)
+        v_rcv = VecRecvProcess(shape_in=shape, num_steps=num_steps)
+
+        up_snd.s_out.connect(td2d.up_in)
+        down_snd.s_out.connect(td2d.down_in)
+        left_snd.s_out.connect(td2d.left_in)
+        right_snd.s_out.connect(td2d.right_in)
+
+        tx_snd.s_out.connect(td2d.t_u)
+        ty_snd.s_out.connect(td2d.t_v)
+
+        trig_snd.s_out.connect(td2d.trig_in)
+
+        td2d.u_out.connect(u_rcv.s_in)
+        td2d.v_out.connect(v_rcv.s_in)
+        # Configure execution and run
+        rcnd = RunSteps(num_steps=num_steps)
+        rcfg = LifRunConfig(select_tag='fixed_pt')
+        td2d.run(condition=rcnd, run_cfg=rcfg)
+        # Gather spike data and stop
+        u_data = u_rcv.spk_data.get().astype(np.int32)
+        v_data = v_rcv.spk_data.get().astype(np.int32)
+        td2d.stop()
+
+        expected_out_v = np.zeros((num_steps, shape[0], shape[1]), dtype=np.int32)
+        expected_out_v[4, :] = 2
+
+        expected_out_u = np.zeros((num_steps, shape[0], shape[1]), dtype=np.int32)
+        expected_out_u[5, :] = 0
+
+        self.assertTrue(np.all(expected_out_v == v_data), msg="{0}".format(v_data))
+        self.assertTrue(np.all(expected_out_u == u_data), msg="{0}".format(u_data))
+
+    def test_different_polarity_floating(self):
         """
         Test the output of the network when the polarity of the
         direction input is different from the polarity of the trigger.
@@ -512,6 +858,92 @@ class TestTd2d(unittest.TestCase):
 
         expected_out_u = np.zeros((num_steps, shape[0], shape[1]))
         expected_out_u[6, :] = 4.
+
+        self.assertTrue(np.all(expected_out_v == v_data), msg="{0}".format(v_data))
+        self.assertTrue(np.all(expected_out_u == u_data), msg="{0}".format(u_data))
+
+    def test_different_polarity_fixed(self):
+        """
+        Test the output of the network when the polarity of the
+        direction input is different from the polarity of the trigger.
+        The counter should  be stopped if the polarity is teh same, but
+        it should keep going the the polarity is different
+        """
+        shape = (3, 3)
+        num_steps = 10
+
+        td2d = TDE2D(shape=shape)
+
+        up_times = np.zeros((num_steps,), dtype=bool)
+        up_times[2] = True
+        up_snd = VecSendProcess(shape=shape, num_steps=num_steps,
+                                vec_to_send=np.full(shape, -1.0, dtype=np.int32),
+                                send_at_times=up_times)
+        down_times = np.zeros((num_steps,), dtype=bool)
+        down_snd = VecSendProcess(shape=shape, num_steps=num_steps,
+                                  vec_to_send=np.ones(shape, dtype=np.int32),
+                                  send_at_times=down_times)
+        right_times = np.zeros((num_steps,), dtype=bool)
+        right_times[2] = True
+        right_snd = VecSendProcess(shape=shape, num_steps=num_steps,
+                                   vec_to_send=np.ones(shape, dtype=np.int32),
+                                   send_at_times=right_times)
+        left_times = np.zeros((num_steps,))
+        left_snd = VecSendProcess(shape=shape, num_steps=num_steps,
+                                  vec_to_send=np.ones(shape, dtype=np.int32),
+                                  send_at_times=left_times)
+
+        trig_times = np.zeros((num_steps,), dtype=bool)
+        trig_times[4] = True
+        trig_snd = VecSendProcess(shape=shape, num_steps=num_steps,
+                                  vec_to_send=np.full(shape, -1.0, dtype=np.int32),
+                                  send_at_times=trig_times)
+        trig_times_pos = np.zeros((num_steps,), dtype=bool)
+        trig_times_pos[6] = True
+        trig_snd_pos = VecSendProcess(shape=shape, num_steps=num_steps,
+                                      vec_to_send=np.full(shape, 1.0, dtype=np.int32),
+                                      send_at_times=trig_times_pos)
+
+        tx_times = np.ones((num_steps,), dtype=bool)
+        tx_snd = VecSendProcess(shape=shape, num_steps=num_steps,
+                                vec_to_send=np.ones(shape, dtype=np.int32),
+                                send_at_times=tx_times)
+
+        ty_times = np.ones((num_steps,), dtype=bool)
+        ty_snd = VecSendProcess(shape=shape, num_steps=num_steps,
+                                vec_to_send=np.ones(shape, dtype=np.int32),
+                                send_at_times=ty_times)
+
+        u_rcv = VecRecvProcess(shape_in=shape, num_steps=num_steps)
+        v_rcv = VecRecvProcess(shape_in=shape, num_steps=num_steps)
+
+        up_snd.s_out.connect(td2d.up_in)
+        down_snd.s_out.connect(td2d.down_in)
+        left_snd.s_out.connect(td2d.left_in)
+        right_snd.s_out.connect(td2d.right_in)
+
+        tx_snd.s_out.connect(td2d.t_u)
+        ty_snd.s_out.connect(td2d.t_v)
+
+        trig_snd.s_out.connect(td2d.trig_in)
+        trig_snd_pos.s_out.connect(td2d.trig_in)
+
+        td2d.u_out.connect(u_rcv.s_in)
+        td2d.v_out.connect(v_rcv.s_in)
+        # Configure execution and run
+        rcnd = RunSteps(num_steps=num_steps)
+        rcfg = LifRunConfig(select_tag='fixed_pt')
+        td2d.run(condition=rcnd, run_cfg=rcfg)
+        # Gather spike data and stop
+        u_data = u_rcv.spk_data.get().astype(np.int32)
+        v_data = v_rcv.spk_data.get().astype(np.int32)
+        td2d.stop()
+
+        expected_out_v = np.zeros((num_steps, shape[0], shape[1]), dtype=np.int32)
+        expected_out_v[4, :] = 2
+
+        expected_out_u = np.zeros((num_steps, shape[0], shape[1]), dtype=np.int32)
+        expected_out_u[6, :] = 4
 
         self.assertTrue(np.all(expected_out_v == v_data), msg="{0}".format(v_data))
         self.assertTrue(np.all(expected_out_u == u_data), msg="{0}".format(u_data))

@@ -66,21 +66,23 @@ class Semd2dLayer(AbstractProcess):
         self.avg_debug = OutPort(shape=self.out_shape)
         # DEBUG
         self.initialize_weights()
-        self.initialize_conv_weights(avg_conv_shape)
+        #self.initialize_conv_weights(avg_conv_shape)
 
-    def initialize_weights(self):
-        up_weights = utils.get_connection_up(self.out_shape)
-        down_weights = utils.get_connection_down(self.out_shape)
-        left_weights = utils.get_connection_left(self.out_shape)
-        right_weights = utils.get_connection_right(self.out_shape)
+    def initialize_weights(self, dist=1):
 
-        self.up_weights = Var(shape=self.out_shape, init=up_weights)
-        self.down_weights = Var(shape=self.out_shape, init=down_weights)
-        self.left_weights = Var(shape=self.out_shape, init=left_weights)
-        self.right_weights = Var(shape=self.out_shape, init=right_weights)
-        n_elems = self.out_shape[0] * self.out_shape[1]
-        conn_shape = (n_elems, n_elems)
-        self.trig_weights = Var(shape=(conn_shape), init=np.eye(n_elems, n_elems))
+        up_weights = utils.get_conv_up(dist)
+        down_weights = utils.get_conv_down(dist)
+        left_weights = utils.get_conv_left(dist)
+        right_weights = utils.get_conv_right(dist)
+        trig_weights = utils.get_conv_eye(dist)
+
+        conv_weight_shape = up_weights.shape
+
+        self.up_weights = Var(shape=conv_weight_shape, init=up_weights)
+        self.down_weights = Var(shape=conv_weight_shape, init=down_weights)
+        self.left_weights = Var(shape=conv_weight_shape, init=left_weights)
+        self.right_weights = Var(shape=conv_weight_shape, init=right_weights)
+        self.trig_weights = Var(shape=conv_weight_shape, init=trig_weights)
 
     def initialize_conv_weights(self, avg_conv_shape):
         n_elems = self.out_shape[0] * self.out_shape[1]
@@ -106,59 +108,62 @@ class Semd2dLayerModel(AbstractSubProcessModel):
         avg_min_meas = proc.init_args.get("avg_min_meas", 1)
         avg_alpha = proc.init_args.get("avg_alpha", 0.5)
 
-        up_weights = proc.vars.up_weights.init
-        down_weights = proc.vars.down_weights.init
-        left_weights = proc.vars.left_weights.init
-        right_weights = proc.vars.right_weights.init
-        trig_weights = proc.vars.trig_weights.init
-        conv_avg_weights = proc.vars.conv_avg_weights.init
+        up_weights = proc.vars.up_weights.get()
+        down_weights = proc.vars.down_weights.get()
+        left_weights = proc.vars.left_weights.get()
+        right_weights = proc.vars.right_weights.get()
+        trig_weights = proc.vars.trig_weights.get()
 
-        # convolution layer with reshape proc
-        # this layer performs the subsampling and is the connection layer
-        # between the input and the network
-        # TODO option to remove subsampling layer
-        # bias_weight = (1.0 / (conv_shape[0] * conv_shape[1])) / thresh_conv
-        # self.conv = ReshapeConv(input_shape=shape, conv_shape=conv_shape, conv_stride=conv_stride,
-        #                         bias_weight=bias_weight)
+        # TODO implement subsampling in lava
 
-        # out_shape = (45, 60)
-        # # connect the input to the convolution
-        # #proc.in_ports.s_in.connect(self.conv.in_ports.s_in)
-        #
-        # # lif layer that collects the value from the convolution layer and fires when enough neuron in the input fire
-        # self.lif = TernaryLIF(shape=out_shape, du=1, dv=0, vth_hi=vth, vth_lo=-vth, use_graded_spike=True)
-        #
-        # # conv to lif
-        # proc.in_ports.s_in.connect(self.lif.a_in)
-
-        # TDE layer, it contains the TDE for all the 4 directions
-        out_shape = shape
-        self.td = TDE2D(shape=out_shape)
+        self.td = TDE2D(shape=shape)
         #
         proc.in_ports.tu_in.connect(self.td.t_u)
         proc.in_ports.tv_in.connect(self.td.t_v)
-        #
-        n_elems = out_shape[0] * out_shape[1]
-        conn_shape = (n_elems, n_elems)
-        #
         # create all the connections for the TDE2D
-        self.dense_up = Dense(shape=conn_shape, weights=up_weights, use_graded_spike=True, sign_mode=2)
-        self.dense_down = Dense(shape=conn_shape, weights=down_weights, use_graded_spike=True, sign_mode=2)
-        self.dense_left = Dense(shape=conn_shape, weights=left_weights, use_graded_spike=True, sign_mode=2)
-        self.dense_right = Dense(shape=conn_shape, weights=right_weights, use_graded_spike=True, sign_mode=2)
-        self.dense_trig = Dense(shape=conn_shape, weights=trig_weights, use_graded_spike=True, sign_mode=2)
+        shape_conv = (shape[0], shape[1], 1)
+        self.conn_up = Conv(
+            input_shape=shape_conv,
+            weight=up_weights,
+            padding=1,
+            use_graded_spike=True
+        )
+        self.conn_down = Conv(
+            input_shape=shape_conv,
+            weight=down_weights,
+            padding=1,
+            use_graded_spike=True
+        )
+        self.conn_left = Conv(
+            input_shape=shape_conv,
+            weight=left_weights,
+            padding=1,
+            use_graded_spike=True
+        )
+        self.conn_right = Conv(
+            input_shape=shape_conv,
+            weight=right_weights,
+            padding=1,
+            use_graded_spike=True
+        )
+        self.conn_trig = Conv(
+            input_shape=shape_conv,
+            weight=trig_weights,
+            padding=1,
+            use_graded_spike=True
+        )
         # connect to the dense layers
-        proc.in_ports.s_in.flatten().connect(self.dense_up.s_in)
-        proc.in_ports.s_in.flatten().connect(self.dense_down.s_in)
-        proc.in_ports.s_in.flatten().connect(self.dense_left.s_in)
-        proc.in_ports.s_in.flatten().connect(self.dense_right.s_in)
-        proc.in_ports.s_in.flatten().connect(self.dense_trig.s_in)
+        proc.in_ports.s_in.reshape(shape_conv).connect(self.conn_up.s_in)
+        proc.in_ports.s_in.reshape(shape_conv).connect(self.conn_down.s_in)
+        proc.in_ports.s_in.reshape(shape_conv).connect(self.conn_left.s_in)
+        proc.in_ports.s_in.reshape(shape_conv).connect(self.conn_right.s_in)
+        proc.in_ports.s_in.reshape(shape_conv).connect(self.conn_trig.s_in)
         # connect the dense to the TDE2D
-        self.dense_up.a_out.reshape(out_shape).connect(self.td.up_in)
-        self.dense_down.a_out.reshape(out_shape).connect(self.td.down_in)
-        self.dense_left.a_out.reshape(out_shape).connect(self.td.left_in)
-        self.dense_right.a_out.reshape(out_shape).connect(self.td.right_in)
-        self.dense_trig.a_out.reshape(out_shape).connect(self.td.trig_in)
+        self.conn_up.a_out.reshape(shape).connect(self.td.up_in)
+        self.conn_down.a_out.reshape(shape).connect(self.td.down_in)
+        self.conn_left.a_out.reshape(shape).connect(self.td.left_in)
+        self.conn_right.a_out.reshape(shape).connect(self.td.right_in)
+        self.conn_trig.a_out.reshape(shape).connect(self.td.trig_in)
 
         # Average Layer
         # self.average_layer = AverageLayer(shape=out_shape, mean_thr=avg_thresh, min_meas=avg_min_meas, avg_alpha=avg_alpha)

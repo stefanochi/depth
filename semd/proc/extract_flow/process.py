@@ -140,7 +140,7 @@ class PyExtractFlowModelFixed(PyLoihiProcessModel):
         h_td_out = np.zeros(right_td_data.shape, dtype=np.int32)
         r_m = np.logical_and(
             right_td_data > 0,
-            np.logical_or(right_td_data < left_td_data, up_td_data == 0)
+            np.logical_or(right_td_data < left_td_data, left_td_data == 0)
         )
         h_td_out[r_m] = right_td_data[r_m]
         l_m = np.logical_and(
