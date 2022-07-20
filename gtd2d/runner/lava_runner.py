@@ -105,21 +105,23 @@ class LavaRunner(Runner):
         input_n.s_out.connect(semd.s_in)
         input_cam.s_out.connect(cam_input.s_in)
 
-        # semd.u_out.connect(output_u.a_in)
-        # semd.v_out.connect(output_v.a_in)
+        semd.u_out.connect(output_u.a_in)
+        semd.v_out.connect(output_v.a_in)
         semd.d_out.connect(output_d.a_in)
-        # semd.avg_out.connect(output_avg.a_in)
+        semd.avg_out.connect(output_avg.a_in)
         cam_input.x_out.connect(semd.tu_in)
         cam_input.y_out.connect(semd.tv_in)
         # DEBUG
-        # semd.debug_out.connect(debug_output.a_in)
-        # semd.avg_debug.connect(avg_debug_output.a_in)
+        semd.debug_out.connect(debug_output.a_in)
+        semd.avg_debug.connect(avg_debug_output.a_in)
         print("total steps: {}".format(self.timesteps))
         rcnd = RunSteps(num_steps=10)
         rcfg = LifRunConfig(select_tag='fixed_pt')
+
         for t in tqdm(range(int(self.timesteps / 10))):
             #print("t: {}/{}".format(t*100, self.timesteps))
             semd.run(condition=rcnd, run_cfg=rcfg)
+            data = semd.counter.get()
 
         print("retrieving the data...")
         data_u = output_u.data.get()

@@ -37,6 +37,8 @@ class AverageLayer(AbstractProcess):
         self.samples = Var(shape=shape, init=np.zeros(shape))
         self.min_meas = Var(shape=(1,), init=min_meas)
         self.avg_alpha = Var(shape=(1,), init=avg_alpha)
+        alpha_shift = np.log2(1.0 / avg_alpha).astype(np.int32)
+        self.alpha_shift = Var(shape=(1,), init=alpha_shift)
 
 
 @implements(proc=AverageLayer, protocol=LoihiProtocol)
@@ -46,6 +48,7 @@ class PyAverageLayerModelFloat(PyLoihiProcessModel):
     s_in: PyInPort = LavaPyType(PyInPort.VEC_DENSE, float)
     n_in: PyInPort = LavaPyType(PyInPort.VEC_DENSE, float)
     trig_in: PyInPort = LavaPyType(PyInPort.VEC_DENSE, float)
+
     s_out: PyOutPort = LavaPyType(PyOutPort.VEC_DENSE, float)
     n_out: PyOutPort = LavaPyType(PyOutPort.VEC_DENSE, float)
     avg_out: PyOutPort = LavaPyType(PyOutPort.VEC_DENSE, float)
@@ -58,10 +61,11 @@ class PyAverageLayerModelFloat(PyLoihiProcessModel):
     samples: np.ndarray = LavaPyType(np.ndarray, float)
     min_meas: float = LavaPyType(float, float)
     avg_alpha: float = LavaPyType(float, float)
+    alpha_shift: float = LavaPyType(float, float)
 
     def run_spk(self):
-        s_in_data = self.s_in.recv()
         trig_in_data = self.trig_in.recv()
+        s_in_data = self.s_in.recv()
         n_in_data = self.n_in.recv()
         # filter out the outliers
         m = s_in_data != 0.0
@@ -81,8 +85,8 @@ class PyAverageLayerModelFloat(PyLoihiProcessModel):
         m_trig = np.logical_and(np.abs(self.mean - trig_in_data) < self.mean_thr, trig_in_data != 0.0)
 
         # if it is close, update the mean t´with the average
-        self.mean[m_trig] += self.avg_alpha * ((trig_in_data[m_trig]) - self.mean[m_trig])
-        self.samples[m_trig] += 1
+        # self.mean[m_trig] += self.avg_alpha * ((trig_in_data[m_trig]) - self.mean[m_trig])
+        # self.samples[m_trig] += 1
 
         s_out_data = trig_in_data * m_trig
         n_out_data = np.full(self.mean.shape, 1.0) * (trig_in_data != 0.0)
@@ -99,42 +103,42 @@ class PyAverageLayerModelFloat(PyLoihiProcessModel):
 @requires(CPU)
 @tag('fixed_pt')
 class PyAverageLayerModelFixed(PyLoihiProcessModel):
-    s_in: PyInPort = LavaPyType(PyInPort.VEC_DENSE, np.int16, precision=16)
-    n_in: PyInPort = LavaPyType(PyInPort.VEC_DENSE, np.int16, precision=16)
-    trig_in: PyInPort = LavaPyType(PyInPort.VEC_DENSE, np.int16, precision=16)
-    s_out: PyOutPort = LavaPyType(PyOutPort.VEC_DENSE, np.int16, precision=16)
-    n_out: PyOutPort = LavaPyType(PyOutPort.VEC_DENSE, np.int16, precision=16)
-    avg_out: PyOutPort = LavaPyType(PyOutPort.VEC_DENSE, np.int16, precision=16)
+    s_in: PyInPort = LavaPyType(PyInPort.VEC_DENSE, np.int32, precision=24)
+    n_in: PyInPort = LavaPyType(PyInPort.VEC_DENSE, np.int32, precision=24)
+    trig_in: PyInPort = LavaPyType(PyInPort.VEC_DENSE, np.int32, precision=24)
+
+    s_out: PyOutPort = LavaPyType(PyOutPort.VEC_DENSE, np.int32, precision=24)
+    n_out: PyOutPort = LavaPyType(PyOutPort.VEC_DENSE, np.int32, precision=24)
+    avg_out: PyOutPort = LavaPyType(PyOutPort.VEC_DENSE, np.int32, precision=24)
 
     mean: np.ndarray = LavaPyType(np.ndarray, np.int32, precision=24)
     samples: np.ndarray = LavaPyType(np.ndarray, np.int32, precision=24)
     # DEBUG
-    debug_out: PyOutPort = LavaPyType(PyOutPort.VEC_DENSE, np.int16, precision=16)
-    avg_debug: PyOutPort = LavaPyType(PyOutPort.VEC_DENSE, np.int16, precision=16)
+    debug_out: PyOutPort = LavaPyType(PyOutPort.VEC_DENSE, np.int32, precision=24)
+    avg_debug: PyOutPort = LavaPyType(PyOutPort.VEC_DENSE, np.int32, precision=24)
     # DEBUG
-    mean_thr: float = LavaPyType(int, np.int32, precision=16)
-    min_meas: float = LavaPyType(int, np.int32, precision=16)
-    avg_alpha: float = LavaPyType(int, np.int32, precision=16)
+    mean_thr: np.int32 = LavaPyType(int, np.int32, precision=16)
+    min_meas: np.int32 = LavaPyType(int, np.int32, precision=16)
 
-    def __init__(self):
-        super().__init__()
-        self.avg_alpha = np.log2(1.0 / self.avg_alpha).astype(np.int32)
+    avg_alpha: np.int32 = LavaPyType(int, np.int32, precision=16)
+    alpha_shift: np.int32 = LavaPyType(int, np.int32, precision=16)
 
     def run_spk(self):
-        s_in_data = self.s_in.recv()
         trig_in_data = self.trig_in.recv()
+        s_in_data = self.s_in.recv()
         n_in_data = self.n_in.recv()
         # filter out the outliers
         avg_input_idx = s_in_data != 0
         # self.mean[m] = ((self.mean[m] * self.samples[m]) + s_in_data[m]) / (self.samples[m] + n_in_data[m])
-        self.mean[avg_input_idx] += np.right_shift((s_in_data[avg_input_idx] / n_in_data[avg_input_idx]).astype(np.int32) -
-                                      self.mean[avg_input_idx], self.avg_alpha)
+        self.mean[avg_input_idx] += np.right_shift(
+            (s_in_data[avg_input_idx] / n_in_data[avg_input_idx]).astype(np.int32) -
+            self.mean[avg_input_idx], self.alpha_shift)
         self.samples[avg_input_idx] += n_in_data[avg_input_idx]
 
         # DEBUG
         # create list of inputs
         input_list = np.zeros_like(s_in_data)
-        input_list[avg_input_idx] += s_in_data[avg_input_idx] / n_in_data[avg_input_idx]
+        input_list[avg_input_idx] += (s_in_data[avg_input_idx] / n_in_data[avg_input_idx]).astype(np.int32)
         # DEBUG
 
         # check if the trig is close tho the mean, there must be more than min_samples
@@ -143,8 +147,8 @@ class PyAverageLayerModelFixed(PyLoihiProcessModel):
             np.logical_and(self.samples < self.min_meas, trig_in_data != 0))
 
         # if it is close, update the mean t´with the average
-        self.mean[m_trig] += np.right_shift(trig_in_data[m_trig], self.mean[m_trig], self.avg_alpha)
-        self.samples[m_trig] += 1
+        # self.mean[m_trig] += np.right_shift(trig_in_data[m_trig], self.mean[m_trig], self.avg_alpha)
+        # self.samples[m_trig] += 1
 
         s_out_data = trig_in_data * m_trig
         n_out_data = np.full(self.mean.shape, 1) * (trig_in_data != 0)

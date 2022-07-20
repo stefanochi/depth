@@ -31,6 +31,7 @@ class ExtractFlow(AbstractProcess):
         self.u_out = OutPort(shape=shape)
         self.v_out = OutPort(shape=shape)
         self.d_out = OutPort(shape=shape)
+        self.n_out = OutPort(shape=shape)
 
         self.t_u = InPort(shape=shape)
         self.t_v = InPort(shape=shape)
@@ -50,6 +51,7 @@ class PyExtractFlowModelFloat(PyLoihiProcessModel):
     u_out: PyOutPort = LavaPyType(PyOutPort.VEC_DENSE, float)
     v_out: PyOutPort = LavaPyType(PyOutPort.VEC_DENSE, float)
     d_out: PyOutPort = LavaPyType(PyOutPort.VEC_DENSE, float)
+    n_out: PyOutPort = LavaPyType(PyOutPort.VEC_DENSE, float)
 
     t_u: PyInPort = LavaPyType(PyInPort.VEC_DENSE, float)
     t_v: PyInPort = LavaPyType(PyInPort.VEC_DENSE, float)
@@ -95,6 +97,7 @@ class PyExtractFlowModelFloat(PyLoihiProcessModel):
         d = h_td_out * t_u + v_td_out * t_v
         d *= d > 0.0
         self.d_out.send(d)
+        self.n_out.send((d > 0))
 
 
 @implements(proc=ExtractFlow, protocol=LoihiProtocol)
@@ -103,17 +106,18 @@ class PyExtractFlowModelFloat(PyLoihiProcessModel):
 class PyExtractFlowModelFixed(PyLoihiProcessModel):
     """
     """
-    up_in: PyInPort = LavaPyType(PyInPort.VEC_DENSE, np.int32, precision=16)
-    down_in: PyInPort = LavaPyType(PyInPort.VEC_DENSE, np.int32, precision=16)
-    left_in: PyInPort = LavaPyType(PyInPort.VEC_DENSE, np.int32, precision=16)
-    right_in: PyInPort = LavaPyType(PyInPort.VEC_DENSE, np.int32, precision=16)
+    up_in: PyInPort = LavaPyType(PyInPort.VEC_DENSE, np.int32, precision=14)
+    down_in: PyInPort = LavaPyType(PyInPort.VEC_DENSE, np.int32, precision=24)
+    left_in: PyInPort = LavaPyType(PyInPort.VEC_DENSE, np.int32, precision=24)
+    right_in: PyInPort = LavaPyType(PyInPort.VEC_DENSE, np.int32, precision=24)
 
-    u_out: PyOutPort = LavaPyType(PyOutPort.VEC_DENSE, np.int32, precision=16)
-    v_out: PyOutPort = LavaPyType(PyOutPort.VEC_DENSE, np.int32, precision=16)
-    d_out: PyOutPort = LavaPyType(PyOutPort.VEC_DENSE, np.int32, precision=16)
+    u_out: PyOutPort = LavaPyType(PyOutPort.VEC_DENSE, np.int32, precision=24)
+    v_out: PyOutPort = LavaPyType(PyOutPort.VEC_DENSE, np.int32, precision=24)
+    d_out: PyOutPort = LavaPyType(PyOutPort.VEC_DENSE, np.int32, precision=24)
+    n_out: PyOutPort = LavaPyType(PyOutPort.VEC_DENSE, np.int32, precision=24)
 
-    t_u: PyInPort = LavaPyType(PyInPort.VEC_DENSE, np.int32, precision=16)
-    t_v: PyInPort = LavaPyType(PyInPort.VEC_DENSE, np.int32, precision=16)
+    t_u: PyInPort = LavaPyType(PyInPort.VEC_DENSE, np.int32, precision=24)
+    t_v: PyInPort = LavaPyType(PyInPort.VEC_DENSE, np.int32, precision=24)
 
     def run_spk(self):
         # input from each direction
@@ -156,3 +160,4 @@ class PyExtractFlowModelFixed(PyLoihiProcessModel):
         d = h_td_out * t_u + v_td_out * t_v
         d *= d > 0  # ignore negatives
         self.d_out.send(d)
+        self.n_out.send((d > 0).astype(np.int32))

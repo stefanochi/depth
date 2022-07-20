@@ -60,13 +60,15 @@ class Semd2dLayer(AbstractProcess):
         self.v_out = OutPort(shape=self.out_shape)
         self.d_out = OutPort(shape=self.out_shape)
         self.avg_out = OutPort(shape=self.out_shape)
-        self.vth = Var(shape=(1,), init=vth)
+        self.vth = Var(shape=(1,), init=10)
         # DEBUG
         self.debug_out = OutPort(shape=self.out_shape)
         self.avg_debug = OutPort(shape=self.out_shape)
         # DEBUG
         self.initialize_weights()
         #self.initialize_conv_weights(avg_conv_shape)
+
+        self.counter = Var(shape=shape, init=0)
 
     def initialize_weights(self, dist=1):
 
@@ -113,6 +115,7 @@ class Semd2dLayerModel(AbstractSubProcessModel):
         left_weights = proc.vars.left_weights.get()
         right_weights = proc.vars.right_weights.get()
         trig_weights = proc.vars.trig_weights.get()
+        conv_weights_shape = up_weights.shape
 
         # TODO implement subsampling in lava
 
@@ -152,40 +155,68 @@ class Semd2dLayerModel(AbstractSubProcessModel):
             padding=1,
             use_graded_spike=True
         )
-        # connect to the dense layers
+        # connect to the conv layers
         proc.in_ports.s_in.reshape(shape_conv).connect(self.conn_up.s_in)
         proc.in_ports.s_in.reshape(shape_conv).connect(self.conn_down.s_in)
         proc.in_ports.s_in.reshape(shape_conv).connect(self.conn_left.s_in)
         proc.in_ports.s_in.reshape(shape_conv).connect(self.conn_right.s_in)
         proc.in_ports.s_in.reshape(shape_conv).connect(self.conn_trig.s_in)
-        # connect the dense to the TDE2D
+        # connect the conv to the TDE2D
         self.conn_up.a_out.reshape(shape).connect(self.td.up_in)
         self.conn_down.a_out.reshape(shape).connect(self.td.down_in)
         self.conn_left.a_out.reshape(shape).connect(self.td.left_in)
         self.conn_right.a_out.reshape(shape).connect(self.td.right_in)
         self.conn_trig.a_out.reshape(shape).connect(self.td.trig_in)
 
+        # ----------------------
         # Average Layer
-        # self.average_layer = AverageLayer(shape=out_shape, mean_thr=avg_thresh, min_meas=avg_min_meas, avg_alpha=avg_alpha)
-        # # dense connections, the connection here is simply a 1two1
-        # self.dense_avg = Dense(shape=conn_shape, weights=trig_weights, use_graded_spike=True)
-        # self.td.d_out.flatten().connect(self.dense_avg.s_in)
-        # self.dense_avg.a_out.reshape(out_shape).connect(self.average_layer.trig_in)
-        # # recurrent connection in the average layer. Implemented as a convolution
-        # self.conv_dense = Dense(shape=conn_shape, weights=conv_avg_weights, use_graded_spike=True)
-        # self.n_conv_dense = Dense(shape=conn_shape, weights=conv_avg_weights, use_graded_spike=True)
+        self.average_layer = AverageLayer(shape=shape, mean_thr=avg_thresh, min_meas=avg_min_meas, avg_alpha=avg_alpha)
 
-        #self.average_layer.avg_out.flatten().connect(self.conv_dense.s_in)
-        #self.conv_dense.a_out.reshape(out_shape).connect(self.average_layer.s_in)
-        # self.average_layer.n_out.flatten().connect(self.n_conv_dense.s_in)
-        #self.n_conv_dense.a_out.reshape(out_shape).connect(self.average_layer.n_in)
+        # connections for the average layer
+
+        # connect the TDE2D to the average layer. This is a simple eye connection
+        # pixel in one layer connected to the same pixels in the next one-. (Is the connection layer really necessary)
+        self.conn_td2avg = Conv(
+            input_shape=shape_conv,
+            weight=trig_weights,  # just a matrix with 1 in the middle and rest zero
+            padding=1,
+            use_graded_spike=True)
+        self.td.d_out.reshape(shape_conv).connect(self.conn_td2avg.s_in)
+        self.conn_td2avg.a_out.reshape(shape).connect(self.average_layer.trig_in)
+
+        # recurrent connection in the average layer. Implemented as a convolution
+        # each pixel receives the depth values from the neighbours + the number of values received
+        # The depth value is not directly sent to the all the neighbouring pixels after the tde2d
+        # because thi sway is easier to count all the values received
+        avg2avg_conv_weights = np.ones(conv_weights_shape, dtype=np.int32)
+        #avg2avg_conv_weights[:, 1, 1, :] = 0  # TODO change to be more general
+        self.val_td2avg = Conv(
+            input_shape=shape_conv,
+            weight=avg2avg_conv_weights,
+            padding=1,
+            use_graded_spike=True
+        )
+        self.n_td2avg = Conv(
+            input_shape=shape_conv,
+            weight=avg2avg_conv_weights,
+            padding=1,
+            use_graded_spike=True
+        )
+
+        self.td.d_out.reshape(shape_conv).connect(self.val_td2avg.s_in)
+        self.td.n_out.reshape(shape_conv).connect(self.n_td2avg.s_in)
+
+        self.val_td2avg.a_out.reshape(shape).connect(self.average_layer.s_in)
+        self.n_td2avg.a_out.reshape(shape).connect(self.average_layer.n_in)
         # DEBUG
-        #self.average_layer.debug_out.connect(proc.out_ports.debug_out)
-        #self.average_layer.avg_debug.connect(proc.out_ports.avg_debug)
+        self.average_layer.debug_out.connect(proc.out_ports.debug_out)
+        self.average_layer.avg_debug.connect(proc.out_ports.avg_debug)
         # DEBUG
 
         # connect the outputs
         self.td.u_out.connect(proc.out_ports.u_out)
         self.td.v_out.connect(proc.out_ports.v_out)
         self.td.d_out.connect(proc.out_ports.d_out)
-        #self.average_layer.s_out.connect(proc.out_ports.avg_out)
+        self.average_layer.s_out.connect(proc.out_ports.avg_out)
+
+        proc.vars.counter.alias(self.td.counter)

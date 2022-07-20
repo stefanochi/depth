@@ -36,9 +36,12 @@ class TDE2D(AbstractProcess):
         self.u_out = OutPort(shape=shape)
         self.v_out = OutPort(shape=shape)
         self.d_out = OutPort(shape=shape)
+        self.n_out = OutPort(shape=shape)
 
         self.t_u = InPort(shape=shape)
         self.t_v = InPort(shape=shape)
+
+        self.counter = Var(shape=shape, init=0)
 
 
 @implements(proc=TDE2D, protocol=LoihiProtocol)
@@ -78,3 +81,6 @@ class PyTde2dModelFloat(AbstractSubProcessModel):
         self.flow.u_out.connect(proc.out_ports.u_out)
         self.flow.v_out.connect(proc.out_ports.v_out)
         self.flow.d_out.connect(proc.out_ports.d_out)
+        self.flow.n_out.connect(proc.out_ports.n_out)
+
+        proc.vars.counter.alias(self.up_tde.counter)

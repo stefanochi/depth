@@ -73,14 +73,14 @@ if __name__ == '__main__':
     assert len(sys.argv) > 1
     path = sys.argv[1]
     runner = setup(path)
-    #try:
-    start_time = time.time()
-    out = runner.run()
-    end_time = time.time()
+    try:
+        start_time = time.time()
+        out = runner.run()
+        end_time = time.time()
 
-    print("run time: {}".format(end_time - start_time))
-    #except Exception as e:
-     #   print(e)
+        print("run time: {}".format(end_time - start_time))
+    except Exception as e:
+       print(e)
 
     with open(runner.cfg["output_path"], 'wb') as f:
         pickle.dump(out, f)
