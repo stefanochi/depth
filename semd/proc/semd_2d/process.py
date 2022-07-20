@@ -190,17 +190,18 @@ class Semd2dLayerModel(AbstractSubProcessModel):
         # The depth value is not directly sent to the all the neighbouring pixels after the tde2d
         # because thi sway is easier to count all the values received
         avg2avg_conv_weights = np.ones(conv_weights_shape, dtype=np.int32)
+        padding = int(conv_weights_shape[1] / 2)
         #avg2avg_conv_weights[:, 1, 1, :] = 0  # TODO change to be more general
         self.val_td2avg = Conv(
             input_shape=shape_conv,
             weight=avg2avg_conv_weights,
-            padding=1,
+            padding=padding,
             use_graded_spike=True
         )
         self.n_td2avg = Conv(
             input_shape=shape_conv,
             weight=avg2avg_conv_weights,
-            padding=1,
+            padding=padding,
             use_graded_spike=True
         )
 
@@ -218,6 +219,6 @@ class Semd2dLayerModel(AbstractSubProcessModel):
         self.td.u_out.connect(proc.out_ports.u_out)
         self.td.v_out.connect(proc.out_ports.v_out)
         self.td.d_out.connect(proc.out_ports.d_out)
-        self.average_layer.s_out.connect(proc.out_ports.avg_out)
+        self.average_layer.avg_out.connect(proc.out_ports.avg_out)
 
         proc.vars.counter.alias(self.td.counter)

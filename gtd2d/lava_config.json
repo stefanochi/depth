@@ -6,7 +6,7 @@
     "calib_path" : "C:/Users/schiavaz/lava-nc/depth/data/esim_data/line_top/calib.txt",
     "output_path" : "C:/Users/schiavaz/lava-nc/depth/data/esim_data/line_top/results/result.pkl",
 
-    "shift_axes": true,
+    "shift_axes": false,
 
     "dvs_shape" : [180, 240],
     "time_range" : [0.0, 3.1],
@@ -17,9 +17,10 @@
     "conv_stride" : [1, 1],
     "conv_shape" : [1, 1],
     "thresh_conv" : 0.5,
-    "avg_thresh" : 60,
-    "avg_shape" : [5, 5],
+    "avg_thresh" : 40,
+    "avg_shape" : [7, 7],
     "avg_min_meas" : 5,
+    "avg_alpha" : 0.25,
 
     "chunk_size": 5000
 }

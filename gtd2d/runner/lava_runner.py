@@ -17,6 +17,7 @@ from lava.magma.core.run_conditions import RunSteps
 from semd.proc.semd_2d.process import Semd2dLayer
 from semd.proc.camera_input.process import CameraInputLayer
 from semd.proc.float_input.process import RingBuffer as FloatInput
+from semd.proc.events_sink.process import EventsSink
 
 
 class LavaRunner(Runner):
@@ -34,6 +35,7 @@ class LavaRunner(Runner):
         self.avg_thresh = cfg["avg_thresh"]
         self.avg_shape = tuple(cfg["avg_shape"])
         self.avg_min_meas = cfg["avg_min_meas"]
+        self.avg_alpha = cfg["avg_alpha"]
 
         self.input_buffer = self.gen_input_data(self.events, self.shape, self.timesteps)
         self.vel_input_buffer = self.gen_cam_input_data(self.events, self.cam_poses, self.timesteps)
@@ -81,7 +83,8 @@ class LavaRunner(Runner):
                            conv_stride=self.conv_stride,
                            thresh_conv=self.thresh_conv,
                            avg_thresh=self.avg_thresh,
-                           avg_conv_shape=self.avg_shape)
+                           avg_conv_shape=self.avg_shape,
+                           avg_alpha=self.avg_alpha)
 
         cam_input = CameraInputLayer(shape=self.shape,
                                      focal_length=self.camera_calib[0],
@@ -124,13 +127,20 @@ class LavaRunner(Runner):
             data = semd.counter.get()
 
         print("retrieving the data...")
-        data_u = output_u.data.get()
-        data_v = output_v.data.get()
+        # data_u = output_u.data.get()
+        # print("test1")
+        # data_v = output_v.data.get()
+        # print("test2")
         data_d = output_d.data.get()
+        print("test3")
         data_avg = output_avg.data.get()
+        print("test4")
         # DEBUG
         data_debug = debug_output.data.get()
         data_avg_debug = avg_debug_output.data.get()
+
+        data_u = np.zeros_like(data_d)
+        data_v = np.zeros_like(data_d)
 
         input_n.stop()
 
@@ -147,7 +157,6 @@ class LavaRunner(Runner):
             # DEBUG
             "debug": data_debug,
             "avg_debug": data_avg_debug,
-            "events": self.events
         }
 
         return output

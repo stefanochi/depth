@@ -25,8 +25,7 @@ class AverageLayer(AbstractProcess):
         self.s_in = InPort(shape=shape)
         self.n_in = InPort(shape=shape)
         self.trig_in = InPort(shape=shape)
-        self.s_out = OutPort(shape=shape)
-        self.n_out = OutPort(shape=shape)
+
         self.avg_out = OutPort(shape=shape)
         # DEBUG
         self.debug_out = OutPort(shape=shape)
@@ -49,8 +48,6 @@ class PyAverageLayerModelFloat(PyLoihiProcessModel):
     n_in: PyInPort = LavaPyType(PyInPort.VEC_DENSE, float)
     trig_in: PyInPort = LavaPyType(PyInPort.VEC_DENSE, float)
 
-    s_out: PyOutPort = LavaPyType(PyOutPort.VEC_DENSE, float)
-    n_out: PyOutPort = LavaPyType(PyOutPort.VEC_DENSE, float)
     avg_out: PyOutPort = LavaPyType(PyOutPort.VEC_DENSE, float)
     # DEBUG
     debug_out: PyOutPort = LavaPyType(PyOutPort.VEC_DENSE, float)
@@ -67,32 +64,25 @@ class PyAverageLayerModelFloat(PyLoihiProcessModel):
         trig_in_data = self.trig_in.recv()
         s_in_data = self.s_in.recv()
         n_in_data = self.n_in.recv()
-        # filter out the outliers
+
+        # update the mean with the s_in values
         m = s_in_data != 0.0
-        # self.mean[m] = ((self.mean[m] * self.samples[m]) + s_in_data[m]) / (self.samples[m] + n_in_data[m])
         self.mean[m] += self.avg_alpha * ((s_in_data[m] / n_in_data[m]) - self.mean[m])
         self.samples[m] += n_in_data[m]
+
         # DEBUG
         # create list of inputs
         input_list = np.zeros_like(s_in_data)
         input_list[m] += s_in_data[m] / n_in_data[m]
         # DEBUG
 
-        # check if the trig is close tho the mean, there must be more than min_samples
-        # m_trig = np.logical_or(
-        #     np.logical_and(np.abs(self.mean - trig_in_data) < self.mean_thr, trig_in_data != 0.0),
-        #     np.logical_and(self.samples < self.min_meas, trig_in_data != 0.0))
+        # check if the trig is close tho the mean
         m_trig = np.logical_and(np.abs(self.mean - trig_in_data) < self.mean_thr, trig_in_data != 0.0)
 
-        # if it is close, update the mean t´with the average
-        # self.mean[m_trig] += self.avg_alpha * ((trig_in_data[m_trig]) - self.mean[m_trig])
-        # self.samples[m_trig] += 1
-
+        # send the filtered depths
         s_out_data = trig_in_data * m_trig
-        n_out_data = np.full(self.mean.shape, 1.0) * (trig_in_data != 0.0)
-        self.s_out.send(s_out_data)
-        self.n_out.send(n_out_data)
-        self.avg_out.send(trig_in_data)
+
+        self.avg_out.send(s_out_data)
         # DEBUG
         self.debug_out.send(input_list)
         self.avg_debug.send(self.mean)
@@ -107,8 +97,6 @@ class PyAverageLayerModelFixed(PyLoihiProcessModel):
     n_in: PyInPort = LavaPyType(PyInPort.VEC_DENSE, np.int32, precision=24)
     trig_in: PyInPort = LavaPyType(PyInPort.VEC_DENSE, np.int32, precision=24)
 
-    s_out: PyOutPort = LavaPyType(PyOutPort.VEC_DENSE, np.int32, precision=24)
-    n_out: PyOutPort = LavaPyType(PyOutPort.VEC_DENSE, np.int32, precision=24)
     avg_out: PyOutPort = LavaPyType(PyOutPort.VEC_DENSE, np.int32, precision=24)
 
     mean: np.ndarray = LavaPyType(np.ndarray, np.int32, precision=24)
@@ -127,9 +115,10 @@ class PyAverageLayerModelFixed(PyLoihiProcessModel):
         trig_in_data = self.trig_in.recv()
         s_in_data = self.s_in.recv()
         n_in_data = self.n_in.recv()
-        # filter out the outliers
+
+        # update the mean with the s_in values
+        # TODO fix point division
         avg_input_idx = s_in_data != 0
-        # self.mean[m] = ((self.mean[m] * self.samples[m]) + s_in_data[m]) / (self.samples[m] + n_in_data[m])
         self.mean[avg_input_idx] += np.right_shift(
             (s_in_data[avg_input_idx] / n_in_data[avg_input_idx]).astype(np.int32) -
             self.mean[avg_input_idx], self.alpha_shift)
@@ -142,19 +131,11 @@ class PyAverageLayerModelFixed(PyLoihiProcessModel):
         # DEBUG
 
         # check if the trig is close tho the mean, there must be more than min_samples
-        m_trig = np.logical_or(
-            np.logical_and(np.abs(self.mean - trig_in_data) < self.mean_thr, trig_in_data != 0),
-            np.logical_and(self.samples < self.min_meas, trig_in_data != 0))
-
-        # if it is close, update the mean t´with the average
-        # self.mean[m_trig] += np.right_shift(trig_in_data[m_trig], self.mean[m_trig], self.avg_alpha)
-        # self.samples[m_trig] += 1
+        m_trig = np.logical_and(np.abs(self.mean - trig_in_data) < self.mean_thr, trig_in_data != 0)
 
         s_out_data = trig_in_data * m_trig
-        n_out_data = np.full(self.mean.shape, 1) * (trig_in_data != 0)
-        self.s_out.send(s_out_data)
-        self.n_out.send(n_out_data)
-        self.avg_out.send(trig_in_data)
+
+        self.avg_out.send(s_out_data)
         # DEBUG
         self.debug_out.send(input_list)
         self.avg_debug.send(self.mean)
