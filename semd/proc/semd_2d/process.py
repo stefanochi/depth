@@ -109,13 +109,14 @@ class Semd2dLayerModel(AbstractSubProcessModel):
         avg_thresh = proc.init_args.get("avg_thresh", 50)
         avg_min_meas = proc.init_args.get("avg_min_meas", 1)
         avg_alpha = proc.init_args.get("avg_alpha", 0.5)
+        avg_conv_shape = proc.init_args.get("avg_conv_shape", (1, 1))
 
         up_weights = proc.vars.up_weights.get()
         down_weights = proc.vars.down_weights.get()
         left_weights = proc.vars.left_weights.get()
         right_weights = proc.vars.right_weights.get()
         trig_weights = proc.vars.trig_weights.get()
-        conv_weights_shape = up_weights.shape
+        conv_weights_shape = (1, avg_conv_shape[0], avg_conv_shape[1], 1)
 
         # TODO implement subsampling in lava
 
