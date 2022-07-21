@@ -80,7 +80,7 @@ class PyAverageLayerModelFloat(PyLoihiProcessModel):
         m_trig = np.logical_and(np.abs(self.mean - trig_in_data) < self.mean_thr, trig_in_data != 0.0)
 
         # send the filtered depths
-        s_out_data = trig_in_data * m_trig
+        s_out_data = self.mean * m_trig
 
         self.avg_out.send(s_out_data)
         # DEBUG
@@ -133,7 +133,7 @@ class PyAverageLayerModelFixed(PyLoihiProcessModel):
         # check if the trig is close tho the mean, there must be more than min_samples
         m_trig = np.logical_and(np.abs(self.mean - trig_in_data) < self.mean_thr, trig_in_data != 0)
 
-        s_out_data = trig_in_data * m_trig
+        s_out_data = self.mean * m_trig
 
         self.avg_out.send(s_out_data)
         # DEBUG

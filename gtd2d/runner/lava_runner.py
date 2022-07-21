@@ -6,6 +6,7 @@ from .runner import Runner
 from . import flow_utils
 import numpy as np
 from tqdm import tqdm
+import scipy.sparse
 
 from lava.proc.io.source import RingBuffer
 from lava.proc.io.sink import RingBuffer as SinkBuffer
@@ -96,67 +97,60 @@ class LavaRunner(Runner):
         input_n = RingBuffer(self.input_buffer)
         input_cam = FloatInput(self.vel_input_buffer)
 
-        output_u = SinkBuffer(shape=out_shape, buffer=self.timesteps)
-        output_v = SinkBuffer(shape=out_shape, buffer=self.timesteps)
-        output_d = SinkBuffer(shape=out_shape, buffer=self.timesteps)
-        output_avg = SinkBuffer(shape=out_shape, buffer=self.timesteps)
-        cam_output_x = SinkBuffer(shape=out_shape, buffer=self.timesteps)
+        # output_u = SinkBuffer(shape=out_shape, buffer=self.timesteps)
+        # output_v = SinkBuffer(shape=out_shape, buffer=self.timesteps)
+        # output_d = SinkBuffer(shape=out_shape, buffer=self.timesteps)
+        # output_avg = SinkBuffer(shape=out_shape, buffer=self.timesteps)
+        # cam_output_x = SinkBuffer(shape=out_shape, buffer=self.timesteps)
+        raw_depth_sink = EventsSink(shape=out_shape)
+        mean_depth_sink = EventsSink(shape=out_shape)
         # DEBUG
-        debug_output = SinkBuffer(shape=out_shape, buffer=self.timesteps)
-        avg_debug_output = SinkBuffer(shape=out_shape, buffer=self.timesteps)
+        # debug_output = SinkBuffer(shape=out_shape, buffer=self.timesteps)
+        # avg_debug_output = SinkBuffer(shape=out_shape, buffer=self.timesteps)
 
         input_n.s_out.connect(semd.s_in)
         input_cam.s_out.connect(cam_input.s_in)
 
-        semd.u_out.connect(output_u.a_in)
-        semd.v_out.connect(output_v.a_in)
-        semd.d_out.connect(output_d.a_in)
-        semd.avg_out.connect(output_avg.a_in)
+        # semd.u_out.connect(output_u.a_in)
+        # semd.v_out.connect(output_v.a_in)
+        # semd.d_out.connect(output_d.a_in)
+
+        semd.d_out.connect(raw_depth_sink.a_in)
+        semd.avg_out.connect(mean_depth_sink.a_in)
+
+        # semd.avg_out.connect(output_avg.a_in)
         cam_input.x_out.connect(semd.tu_in)
         cam_input.y_out.connect(semd.tv_in)
         # DEBUG
-        semd.debug_out.connect(debug_output.a_in)
-        semd.avg_debug.connect(avg_debug_output.a_in)
+        # semd.debug_out.connect(debug_output.a_in)
+        # semd.avg_debug.connect(avg_debug_output.a_in)
         print("total steps: {}".format(self.timesteps))
-        rcnd = RunSteps(num_steps=10)
+
+        rcnd = RunSteps(num_steps=1)
         rcfg = LifRunConfig(select_tag='fixed_pt')
-
-        for t in tqdm(range(int(self.timesteps / 10))):
-            #print("t: {}/{}".format(t*100, self.timesteps))
-            semd.run(condition=rcnd, run_cfg=rcfg)
-            data = semd.counter.get()
-
-        print("retrieving the data...")
-        # data_u = output_u.data.get()
-        # print("test1")
-        # data_v = output_v.data.get()
-        # print("test2")
-        data_d = output_d.data.get()
-        print("test3")
-        data_avg = output_avg.data.get()
-        print("test4")
-        # DEBUG
-        data_debug = debug_output.data.get()
-        data_avg_debug = avg_debug_output.data.get()
-
-        data_u = np.zeros_like(data_d)
-        data_v = np.zeros_like(data_d)
-
-        input_n.stop()
-
         times = np.linspace(self.events[0, 0], self.events[-1, 0], self.timesteps)
         step_t = (times[-1] - times[0]) / self.timesteps
 
+        raw_depth_sparse = []
+        mean_depth_sparse = []
+
+        for t in tqdm(range(int(self.timesteps))):
+            semd.run(condition=rcnd, run_cfg=rcfg)
+            data_raw = raw_depth_sink.events_data.get()
+            data_mean = mean_depth_sink.events_data.get()
+
+            sparse_matrix_raw = scipy.sparse.csr_matrix(data_raw) * step_t
+            sparse_matrix_mean = scipy.sparse.csr_matrix(data_mean) * step_t
+
+            raw_depth_sparse.append(sparse_matrix_raw)
+            mean_depth_sparse.append(sparse_matrix_mean)
+
+        input_n.stop()
+
         output = {
             "times": times,
-            "raw_depths": np.moveaxis(data_d, [2, 1, 0], [-3, -1, -2]) * step_t,
-            "mean_depths": np.moveaxis(data_avg, [2, 1, 0], [-3, -1, -2]) * step_t,
-            "median_depths": None,
-            "flow_u": np.moveaxis(data_u, [2, 1, 0], [-3, -1, -2]),
-            "flow_v": np.moveaxis(data_v, [2, 1, 0], [-3, -1, -2]),
-            # DEBUG
-            "debug": data_debug,
-            "avg_debug": data_avg_debug,
+            "raw_depths": raw_depth_sparse,
+            "mean_depths": mean_depth_sparse
         }
 
         return output

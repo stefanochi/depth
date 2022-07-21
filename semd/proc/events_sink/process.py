@@ -19,10 +19,9 @@ class EventsSink(AbstractProcess):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         shape = kwargs.get("shape", (1, 1))
-        buffer = kwargs.get('buffer')
         self.a_in = InPort(shape=shape)
 
-        self.events_data = Var(shape=(1, buffer), init=np.empty((1, buffer), dtype=object))
+        self.events_data = Var(shape=shape, init=np.empty(shape))
 
 
 @implements(proc=EventsSink, protocol=LoihiProtocol)
@@ -35,62 +34,20 @@ class PyEventsSinkModelFloat(PyLoihiProcessModel):
     point implementation.
     """
     a_in: PyInPort = LavaPyType(PyInPort.VEC_DENSE, float)
-    events_data: np.ndarray = LavaPyType(np.ndarray, object)
+    events_data: np.ndarray = LavaPyType(np.ndarray, np.int32)
 
     def run_spk(self):
         a_in_data = self.a_in.recv()
-        buffer = self.events_data.shape[-1]
-        data_sparse = sparse.csr_matrix(a_in_data)
-        self.events_data[..., self.time_step % buffer] = data_sparse
+        self.events_data = a_in_data
 
 
 @implements(proc=EventsSink, protocol=LoihiProtocol)
 @requires(CPU)
 @tag('fixed_pt')
 class PyEventsSinkModelFixed(PyLoihiProcessModel):
-    """Implementation of Leaky-Integrate-and-Fire neural process in floating
-    point precision. This short and simple ProcessModel can be used for quick
-    algorithmic prototyping, without engaging with the nuances of a fixed
-    point implementation.
-    ----------------
-    a_in: signed 16-bit integer, facilitating spike. From camera, could be just 1 bit(?). Is it fixed in hw?
-    t_in: signed 16-bit integer, trigger spike.
-    s_out: unsigned 16-bit integer. Output time difference. What is the maximum precision?32?
-
-    counter: unsigned 24-bit integer. The present state of the counters
-    sign: the sign of the last event. Used for comparison.
-    """
     a_in: PyInPort = LavaPyType(PyInPort.VEC_DENSE, np.int32)
-    s_out: PyOutPort = LavaPyType(PyOutPort.VEC_DENSE, np.int32)
-    t_in: PyInPort = LavaPyType(PyInPort.VEC_DENSE, np.int32)
-
-    counter: np.ndarray = LavaPyType(np.ndarray, np.uint32, precision=24)
-    sign: np.ndarray = LavaPyType(np.ndarray, np.int8, precision=2)
+    events_data: np.ndarray = LavaPyType(np.ndarray, np.int32)
 
     def run_spk(self):
-        trig_in_data = self.t_in.recv()
         a_in_data = self.a_in.recv()
-
-        # check if trigger is received, it has to have the same sign as the facilitating spike
-        equal_sign_idx = np.equal(
-            np.sign(trig_in_data),
-            self.sign
-        )
-        # m = (np.sign(trig_in_data) == self.sign) * (self.sign != 0)
-        s_out_data = self.counter * equal_sign_idx
-        # reset the counter
-        self.counter[equal_sign_idx] = 0.0
-
-        # increase the counters that are started
-        self.counter[self.counter > 0] += 1
-
-        # if a new spike arrives (a_in) start the counter (or restart) and store the sign
-        # If a trigger arrived in the same timestep, the counter is not started
-        new_counter_idx = np.logical_and(
-            np.sign(a_in_data) != 0,  # incoming facilitating spike
-            np.sign(trig_in_data) == 0)  # trigger spike not arriving at the same time
-        self.sign[new_counter_idx] = np.sign(a_in_data[new_counter_idx])  # get the sign of the facilitating spike
-        # start the counter
-        self.counter[new_counter_idx] = 1
-
-        self.s_out.send(s_out_data)
+        self.events_data = a_in_data
