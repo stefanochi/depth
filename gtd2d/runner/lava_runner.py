@@ -150,7 +150,10 @@ class LavaRunner(Runner):
         output = {
             "times": times,
             "raw_depths": raw_depth_sparse,
-            "mean_depths": mean_depth_sparse
+            "mean_depths": mean_depth_sparse,
+            "cam_poses": self.cam_poses,
+            "cam_calib": self.camera_calib,
+            "cfg": self.cfg
         }
 
         return output

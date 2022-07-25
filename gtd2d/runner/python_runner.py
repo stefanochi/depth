@@ -78,7 +78,10 @@ class PythonRunner(Runner):
             "mean_depths": mean_depths,
             "median_depths": median_depths,
             "flow_u": flow_u,
-            "flow_v": flow_v
+            "flow_v": flow_v,
+            "cfg": self.cfg,
+            "cam_poses": self.cam_poses,
+            "cam_calib": self.camera_calib
         }
         print("average chunk duration: {}".format(
             (self.events[-1, 0] - self.events[0, 0]) / n_chunks))
