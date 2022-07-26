@@ -98,8 +98,8 @@ class LavaRunner(Runner):
         input_n = RingBuffer(self.input_buffer)
         input_cam = FloatInput(self.vel_input_buffer)
 
-        # output_u = SinkBuffer(shape=out_shape, buffer=self.timesteps)
-        # output_v = SinkBuffer(shape=out_shape, buffer=self.timesteps)
+        output_u = EventsSink(shape=out_shape)
+        output_v = EventsSink(shape=out_shape)
         # output_d = SinkBuffer(shape=out_shape, buffer=self.timesteps)
         # output_avg = SinkBuffer(shape=out_shape, buffer=self.timesteps)
         # cam_output_x = SinkBuffer(shape=out_shape, buffer=self.timesteps)
@@ -112,8 +112,8 @@ class LavaRunner(Runner):
         input_n.s_out.connect(semd.s_in)
         input_cam.s_out.connect(cam_input.s_in)
 
-        # semd.u_out.connect(output_u.a_in)
-        # semd.v_out.connect(output_v.a_in)
+        semd.u_out.connect(output_u.a_in)
+        semd.v_out.connect(output_v.a_in)
         # semd.d_out.connect(output_d.a_in)
 
         semd.d_out.connect(raw_depth_sink.a_in)
@@ -137,17 +137,27 @@ class LavaRunner(Runner):
 
         raw_depth_sparse = []
         mean_depth_sparse = []
+        u_sparse = []
+        v_sparse = []
 
         for t in tqdm(range(int(self.timesteps))):
             semd.run(condition=rcnd, run_cfg=rcfg)
             data_raw = raw_depth_sink.events_data.get()
             data_mean = mean_depth_sink.events_data.get()
 
+            data_u = output_u.events_data.get()
+            data_v = output_v.events_data.get()
+
             sparse_matrix_raw = scipy.sparse.csr_matrix(data_raw) * step_t
             sparse_matrix_mean = scipy.sparse.csr_matrix(data_mean) * step_t
 
+            sparse_matrix_u = scipy.sparse.csr_matrix(data_u) * step_t
+            sparse_matrix_v = scipy.sparse.csr_matrix(data_v) * step_t
+
             raw_depth_sparse.append(sparse_matrix_raw)
             mean_depth_sparse.append(sparse_matrix_mean)
+            u_sparse.append(sparse_matrix_u)
+            v_sparse.append(sparse_matrix_v)
 
         input_n.stop()
 
@@ -157,7 +167,9 @@ class LavaRunner(Runner):
             "mean_depths": mean_depth_sparse,
             "cam_poses": self.cam_poses,
             "cam_calib": self.camera_calib,
-            "cfg": self.cfg
+            "cfg": self.cfg,
+            "flow_u": u_sparse,
+            "flow_v": v_sparse
         }
 
         return output

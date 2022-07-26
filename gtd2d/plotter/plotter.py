@@ -30,12 +30,20 @@ class Plotter:
         self.raw_depths_sparse = out["raw_depths"]
         self.mean_depths_sparse = out["mean_depths"]
         if out["cfg"]["use_lava"]:
+            self.sparse = True
             self.raw_depths = np.array([s.toarray() for s in self.raw_depths_sparse])
             self.mean_depths = np.array([s.toarray() for s in self.mean_depths_sparse])
         else:
+            self.sparse = False
             self.raw_depths = self.raw_depths_sparse
             self.mean_depths = self.mean_depths_sparse
             self.median_depths = out["median_depths"]
+        try:
+            self.flow_u = out["flow_u"]
+            self.flow_v = out["flow_v"]
+        except Exception as e:
+            print("Old recording, flow not present")
+
         self.cam_poses = out["cam_poses"]
         self.cam_calib = out["cam_calib"]
         self.shape = out["cfg"]["dvs_shape"]
@@ -63,6 +71,8 @@ class Plotter:
             depths = self.raw_depths
         elif result_type == "mean":
             depths = self.mean_depths
+        elif result_type == "gt":
+            depths = self.gt
         else:
             raise Exception("Only mean and raw implemented")
 
@@ -76,6 +86,42 @@ class Plotter:
 
         normalized_meas = np.divide(depths_sum, n_measurements, where=depths_sum != 0.0, out=np.zeros_like(depths_sum))
         return normalized_meas
+
+    def get_frame_flow(self, start, end=None):
+        """
+        Returns a frame of the results in the specified ids range.
+        The range can be either a single id or a range defined by start and end.
+        The result has to be normalized by the number of measurements for each point. Important for
+        longer ranges of frames
+        :param result_type: either raw, mean or median
+        :param start: the starting id
+        :param end: the end id (optional)
+        :return: a matrix representing the frame
+        """
+
+        if end is None:
+            end = start + 1
+        if self.sparse:
+            flow_u = [s.toarray() for s in self.flow_u[start:end]]
+            flow_v = [s.toarray() for s in self.flow_v[start:end]]
+        else:
+            flow_u = self.flow_u[start:end]
+            flow_v = self.flow_v[start:end]
+        u_sum = np.nansum(flow_u, axis=0)
+        u_measurements = np.nansum(
+            np.logical_and(
+                flow_u != np.nan,
+                flow_u != 0), axis=0)
+        normalized_u = np.divide(u_sum, u_measurements, where=u_sum != 0.0, out=np.zeros_like(u_sum))
+
+        v_sum = np.nansum(flow_v, axis=0)
+        v_measurements = np.nansum(
+            np.logical_and(
+                flow_v != np.nan,
+                flow_v != 0), axis=0)
+        normalized_v = np.divide(v_sum, v_measurements, where=v_sum != 0.0, out=np.zeros_like(v_sum))
+
+        return normalized_u, normalized_v
 
     def _image2pointcloud(self, d, v_range=None):
         """
@@ -136,15 +182,14 @@ class Plotter:
             [np.zeros((1, 3)), 1]
         ])
 
-        proj = []
-        for p in points:
-            if p[2] == 0:
-                continue
-            po = np.array([p[0], p[1], 1, 1 / p[2]])
-            test = p[2] * np.linalg.inv(K_b @ rt_b) @ po
-            proj.append(test.transpose())
+        tmp = points[:, 2]
+        a = np.ones(points.shape[0]) / points[:, 2]
+        points = np.c_[points[:, :2], np.ones(points.shape[0])]
+        points = np.c_[points, a]
+        points = points.transpose()
 
-        proj = np.array(proj)
+        proj = tmp * (np.linalg.inv(K_b @ rt_b) @ points)
+        proj = proj.transpose()
         return proj
 
     def gen_world_pointcloud(self, result_type, v_range):
@@ -155,8 +200,13 @@ class Plotter:
         """
         if result_type == "raw":
             depths = self.raw_depths_sparse
+            times = self.times
         elif result_type == "mean":
             depths = self.mean_depths_sparse
+            times = self.times
+        elif result_type == "gt":
+            depths = self.gt_depths
+            times = self.gt_times
         else:
             raise Exception("Only mean and raw implemented")
 
@@ -166,10 +216,10 @@ class Plotter:
         for i, d in enumerate(tqdm(depths)):
             points = self._image2pointcloud(d, v_range)
 
-            idx = np.searchsorted(self.cam_poses[:, 0], self.times[i])
+            idx = np.searchsorted(self.cam_poses[:, 0], times[i])
             p0 = self.cam_poses[idx - 1]
             p1 = self.cam_poses[idx]
-            y = (self.times[i] - p0[0]) / (p1[0] - p0[0])
+            y = (times[i] - p0[0]) / (p1[0] - p0[0])
             p = (p0 * (1 - y) + p1 * (y))  # interpolate the camera position
             p[1:4] = p[1:4].reshape(1, 3) @ np.diag([-1, 1, 1])  # TODO why the -1?
 
@@ -199,7 +249,6 @@ class Plotter:
         mapper = cm.ScalarMappable(norm=norm, cmap=cmap)
 
         colors = mapper.to_rgba(points[:, z])[:, :3]
-        print(colors.shape)
 
         pcd.colors = o3d.utility.Vector3dVector(colors)
 
@@ -207,10 +256,17 @@ class Plotter:
 
     def plot_open3d(self, result_type, z=2, v_range=None):
         points = self.gen_world_pointcloud(result_type, v_range)
-        print(points[:,z].min())
-        print(points[:,z].max())
         points_o3d = self.points_to_open3d_pointcloud(points[:, :3], z=z)
         o3d.visualization.draw_geometries([points_o3d])
+
+    def plot_open3d_gt(self, result_type, z=2, v_range=None):
+        points = self.gen_world_pointcloud(result_type, v_range)
+        points_o3d = self.points_to_open3d_pointcloud(points[:, :3], z=z)
+
+        points_gt = self.gen_world_pointcloud("gt", v_range)
+        points_gt_o3d = self.points_to_open3d_pointcloud(points_gt[:, :3], z=z, cmap="gray")
+
+        o3d.visualization.draw_geometries([points_o3d, points_gt_o3d])
 
     def measure_errors(self, result_type, sum_range=25):
         """
