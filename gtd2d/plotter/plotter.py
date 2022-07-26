@@ -5,6 +5,7 @@ from tqdm import tqdm
 import open3d as o3d
 import matplotlib
 import matplotlib.cm as cm
+import scipy.sparse
 
 
 class Plotter:
@@ -12,7 +13,7 @@ class Plotter:
     to produce plots and data. The putput format of the runners will be different,
     but the data and information return should be the same and comparable."""
 
-    def __init__(self, out):
+    def __init__(self, out, base_path="./"):
         """
         Takes a dict with the frames containing the eaw depths measurements and the filtered ones
         additionally.
@@ -26,15 +27,20 @@ class Plotter:
         self.output = out
         self.times = out["times"]
         # convert sparse to result to dense matrices
-        raw_depths_sparse = out["raw_depths"]
-        mean_depths_sparse = out["mean_depths"]
-        self.raw_depths = np.array([s.toarray() for s in raw_depths_sparse])
-        self.mean_depths = np.array([s.toarray() for s in mean_depths_sparse])
+        self.raw_depths_sparse = out["raw_depths"]
+        self.mean_depths_sparse = out["mean_depths"]
+        if out["cfg"]["use_lava"]:
+            self.raw_depths = np.array([s.toarray() for s in self.raw_depths_sparse])
+            self.mean_depths = np.array([s.toarray() for s in self.mean_depths_sparse])
+        else:
+            self.raw_depths = self.raw_depths_sparse
+            self.mean_depths = self.mean_depths_sparse
+            self.median_depths = out["median_depths"]
         self.cam_poses = out["cam_poses"]
         self.cam_calib = out["cam_calib"]
         self.shape = out["cfg"]["dvs_shape"]
         self.subsampling = out["cfg"]["subsampling_factor"]
-        self.path = out["cfg"]["base_path"]
+        self.path = base_path
         self.load_groundtruth()
 
     def load_groundtruth(self):
@@ -78,17 +84,28 @@ class Plotter:
         :param v_range: the depth range to consider. Points outside this range will be ignored
         :return: the point-cloud corresponding to the frame
         """
-        # TODO this function is slow
-        points = []
-        for x in range(d.shape[1]):
-            for y in range(d.shape[0]):
-                if np.isnan(d[y, x]):
-                    continue
-                if v_range is not None:
-                    if v_range[0] > d[y, x] or d[y, x] > v_range[1]:
+        if not self.output["cfg"]["use_lava"]:
+            # the input is a dense matrix
+            points = []
+            for x in range(d.shape[1]):
+                for y in range(d.shape[0]):
+                    if np.isnan(d[y, x]):
                         continue
-                points.append([x, y, d[y, x]])
-        return np.array(points)
+                    if v_range is not None:
+                        if v_range[0] > d[y, x] or d[y, x] > v_range[1]:
+                            continue
+                    points.append([x, y, d[y, x]])
+            return np.array(points)
+        else:
+            # the input is a sparse matrix
+            i, j, v = scipy.sparse.find(d)
+            points = np.zeros((i.shape[0], 3))
+            points[:, 0] = j
+            points[:, 1] = i
+            points[:, 2] = v
+            points = points[
+                np.logical_and(v >= v_range[0], points[:, 2] < v_range[1])]
+            return points
 
     def project3d(self, points, calib, pose):
         """
@@ -130,16 +147,16 @@ class Plotter:
         proj = np.array(proj)
         return proj
 
-    def gen_world_pointcloud(self, result_type):
+    def gen_world_pointcloud(self, result_type, v_range):
         """
         Generate the point-cloud in world coordinates
         :param result_type: either "raw" or "mean"
         :return: the point-cloud
         """
         if result_type == "raw":
-            depths = self.raw_depths
+            depths = self.raw_depths_sparse
         elif result_type == "mean":
-            depths = self.mean_depths
+            depths = self.mean_depths_sparse
         else:
             raise Exception("Only mean and raw implemented")
 
@@ -147,7 +164,7 @@ class Plotter:
         ps = []
         p_init = self.cam_poses[0]
         for i, d in enumerate(tqdm(depths)):
-            points = self._image2pointcloud(d)
+            points = self._image2pointcloud(d, v_range)
 
             idx = np.searchsorted(self.cam_poses[:, 0], self.times[i])
             p0 = self.cam_poses[idx - 1]
@@ -188,9 +205,11 @@ class Plotter:
 
         return pcd
 
-    def plot_open3d(self, result_type, z=2):
-        points = self.gen_world_pointcloud(result_type)
-        points_o3d = self.points_to_open3d_pointcloud(points[:,:3], z=z)
+    def plot_open3d(self, result_type, z=2, v_range=None):
+        points = self.gen_world_pointcloud(result_type, v_range)
+        print(points[:,z].min())
+        print(points[:,z].max())
+        points_o3d = self.points_to_open3d_pointcloud(points[:, :3], z=z)
         o3d.visualization.draw_geometries([points_o3d])
 
     def measure_errors(self, result_type, sum_range=25):

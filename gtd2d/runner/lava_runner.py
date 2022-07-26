@@ -37,6 +37,7 @@ class LavaRunner(Runner):
         self.avg_shape = tuple(cfg["avg_shape"])
         self.avg_min_meas = cfg["avg_min_meas"]
         self.avg_alpha = cfg["avg_alpha"]
+        self.floating = cfg["lava_floating"]
 
         self.input_buffer = self.gen_input_data(self.events, self.shape, self.timesteps)
         self.vel_input_buffer = self.gen_cam_input_data(self.events, self.cam_poses, self.timesteps)
@@ -127,7 +128,10 @@ class LavaRunner(Runner):
         print("total steps: {}".format(self.timesteps))
 
         rcnd = RunSteps(num_steps=1)
-        rcfg = LifRunConfig(select_tag='fixed_pt')
+        if self.floating:
+            rcfg = LifRunConfig(select_tag='floating_pt')
+        else:
+            rcfg = LifRunConfig(select_tag='fixed_pt')
         times = np.linspace(self.events[0, 0], self.events[-1, 0], self.timesteps)
         step_t = (times[-1] - times[0]) / self.timesteps
 
