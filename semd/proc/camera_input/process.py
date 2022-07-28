@@ -74,8 +74,8 @@ class PyCameraInputLayerModelFixed(PyLoihiProcessModel):
         x_out_data = self.px * s_in_data[2] - self.focal_length * s_in_data[0]
         y_out_data = self.py * s_in_data[2] - self.focal_length * s_in_data[1]
 
-        x_out_data = x_out_data.astype(np.int32)
-        y_out_data = y_out_data.astype(np.int32)
+        x_out_data = np.rint(x_out_data).astype(np.int32)
+        y_out_data = np.rint(y_out_data).astype(np.int32)
 
         self.x_out.send(x_out_data)
         self.y_out.send(y_out_data)

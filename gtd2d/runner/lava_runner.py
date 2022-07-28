@@ -102,7 +102,8 @@ class LavaRunner(Runner):
         output_v = EventsSink(shape=out_shape)
         # output_d = SinkBuffer(shape=out_shape, buffer=self.timesteps)
         # output_avg = SinkBuffer(shape=out_shape, buffer=self.timesteps)
-        # cam_output_x = SinkBuffer(shape=out_shape, buffer=self.timesteps)
+        cam_output_x = SinkBuffer(shape=out_shape, buffer=self.timesteps)
+        cam_output_y = SinkBuffer(shape=out_shape, buffer=self.timesteps)
         raw_depth_sink = EventsSink(shape=out_shape)
         mean_depth_sink = EventsSink(shape=out_shape)
         # DEBUG
@@ -111,6 +112,8 @@ class LavaRunner(Runner):
 
         input_n.s_out.connect(semd.s_in)
         input_cam.s_out.connect(cam_input.s_in)
+        cam_input.x_out.connect(cam_output_x.a_in)
+        cam_input.y_out.connect(cam_output_y.a_in)
 
         semd.u_out.connect(output_u.a_in)
         semd.v_out.connect(output_v.a_in)
@@ -159,6 +162,9 @@ class LavaRunner(Runner):
             u_sparse.append(sparse_matrix_u)
             v_sparse.append(sparse_matrix_v)
 
+        cam_x_data = cam_output_x.data.get()
+        cam_y_data = cam_output_y.data.get()
+
         input_n.stop()
 
         output = {
@@ -169,7 +175,9 @@ class LavaRunner(Runner):
             "cam_calib": self.camera_calib,
             "cfg": self.cfg,
             "flow_u": u_sparse,
-            "flow_v": v_sparse
+            "flow_v": v_sparse,
+            "cam_x": cam_x_data,
+            "cam_y": cam_y_data
         }
 
         return output

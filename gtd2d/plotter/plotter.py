@@ -31,8 +31,8 @@ class Plotter:
         self.mean_depths_sparse = out["mean_depths"]
         if out["cfg"]["use_lava"]:
             self.sparse = True
-            self.raw_depths = np.array([s.toarray() for s in self.raw_depths_sparse])
-            self.mean_depths = np.array([s.toarray() for s in self.mean_depths_sparse])
+            self.raw_depths = self.raw_depths_sparse
+            self.mean_depths = self.mean_depths_sparse
         else:
             self.sparse = False
             self.raw_depths = self.raw_depths_sparse
@@ -72,17 +72,23 @@ class Plotter:
         elif result_type == "mean":
             depths = self.mean_depths
         elif result_type == "gt":
-            depths = self.gt
+            depths = self.gt_depths
         else:
             raise Exception("Only mean and raw implemented")
 
         if end is None:
             end = start + 1
-        depths_sum = np.nansum(depths[start:end], axis=0)
+
+        if self.sparse and result_type != "gt":
+            depths = [s.toarray() for s in depths[start:end]]
+        else:
+            depths = depths[start:end]
+
+        depths_sum = np.nansum(depths, axis=0)
         n_measurements = np.nansum(
             np.logical_and(
-                depths[start:end] != np.nan,
-                depths[start:end] != 0), axis=0)
+                depths != np.nan,
+                depths != 0), axis=0)
 
         normalized_meas = np.divide(depths_sum, n_measurements, where=depths_sum != 0.0, out=np.zeros_like(depths_sum))
         return normalized_meas
@@ -102,11 +108,12 @@ class Plotter:
         if end is None:
             end = start + 1
         if self.sparse:
-            flow_u = [s.toarray() for s in self.flow_u[start:end]]
-            flow_v = [s.toarray() for s in self.flow_v[start:end]]
+            flow_u = np.array([s.toarray() for s in self.flow_u[start:end]])
+            flow_v = np.array([s.toarray() for s in self.flow_v[start:end]])
         else:
             flow_u = self.flow_u[start:end]
             flow_v = self.flow_v[start:end]
+
         u_sum = np.nansum(flow_u, axis=0)
         u_measurements = np.nansum(
             np.logical_and(
@@ -282,7 +289,6 @@ class Plotter:
         else:
             raise Exception("Only mean and raw implemented")
         subsampling = self.subsampling
-        shape = self.shape
         times = self.times
         errors = []
         rel_err = []
@@ -292,7 +298,7 @@ class Plotter:
                 continue
             idx = np.searchsorted(times, float(t))
             s_id = max(0, idx - sum_range)
-            e_id = min(depths.shape[0], idx + sum_range)
+            e_id = min(len(depths), idx + sum_range)
             m_depth = self.get_frame(result_type, start=s_id, end=e_id)
 
             gt_d = self.gt_depths[i, ::subsampling, ::subsampling]
@@ -309,3 +315,44 @@ class Plotter:
             rel_err.append(diff_rel)
 
         return np.array(errors)
+
+    def get_all_values(self, result_type, range=None):
+        """
+        Return a list with all the non-zero values. Can be used to plot the histogram, for example
+        :param result_type: either raw or mean
+        :return: list of all the values
+        """
+        if result_type == "raw":
+            depths = self.raw_depths_sparse
+        elif result_type == "mean":
+            depths = self.mean_depths_sparse
+        else:
+            raise Exception("Only mean and raw implemented")
+        if range is not None:
+            depths = depths[range[0]:range[1]]
+        val_list = []
+        for s in depths:
+            _, _, v = scipy.sparse.find(s)
+            val_list = val_list + v.tolist()
+        return np.array(val_list)
+
+    def get_all_values_flow(self, range=None):
+        """
+        Return a list with all the non-zero values. Can be used to plot the histogram, for example
+        :param result_type: either raw or mean
+        :return: list of all the values
+        """
+        if range is None:
+            start = 0
+            end = -1
+        else:
+            start = range[0]
+            end = range[1]
+        if self.sparse:
+            flow_u = np.array([s.toarray() for s in self.flow_u[start:end]])
+            flow_v = np.array([s.toarray() for s in self.flow_v[start:end]])
+        else:
+            flow_u = self.flow_u[start:end]
+            flow_v = self.flow_v[start:end]
+
+        return flow_u, flow_v

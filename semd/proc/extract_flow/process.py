@@ -158,6 +158,7 @@ class PyExtractFlowModelFixed(PyLoihiProcessModel):
 
         # TODO change to store the values so they don't need to be sent at every timestep
         d = h_td_out * t_u + v_td_out * t_v
-        d *= d > 0  # ignore negatives
-        self.d_out.send(d)
-        self.n_out.send((d > 0).astype(np.int32))
+        positive_idx = d > 0
+        d_positive = d * positive_idx  # ignore negatives
+        self.d_out.send(d_positive)
+        self.n_out.send(positive_idx.astype(np.int32))

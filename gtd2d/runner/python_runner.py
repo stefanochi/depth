@@ -32,6 +32,8 @@ class PythonRunner(Runner):
         median_depths = np.zeros((n_chunks, self.shape[0], self.shape[1]))
         flow_u = np.zeros((n_chunks, self.shape[0], self.shape[1]))
         flow_v = np.zeros((n_chunks, self.shape[0], self.shape[1]))
+        cam_x = np.zeros((n_chunks, self.shape[0], self.shape[1]))
+        cam_y = np.zeros((n_chunks, self.shape[0], self.shape[1]))
         times = np.zeros((n_chunks,))
 
         for i, events_chunk in enumerate(tqdm(np.array_split(self.events, n_chunks, axis=0))):
@@ -51,8 +53,8 @@ class PythonRunner(Runner):
                                                    self.camera_calib[0],
                                                    [self.camera_calib[2], self.camera_calib[3]],
                                                    self.shape)
-            # flow_u[i] = at[0]
-            # flow_v[i] = at[1]
+            cam_x[i] = at[0]
+            cam_y[i] = at[1]
 
             raw_depth = self.compute_depth(td, at)
             raw_depths[i] = raw_depth
@@ -81,7 +83,9 @@ class PythonRunner(Runner):
             "flow_v": flow_v,
             "cfg": self.cfg,
             "cam_poses": self.cam_poses,
-            "cam_calib": self.camera_calib
+            "cam_calib": self.camera_calib,
+            "cam_x": cam_x,
+            "cam_y": cam_y
         }
         print("average chunk duration: {}".format(
             (self.events[-1, 0] - self.events[0, 0]) / n_chunks))

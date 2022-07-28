@@ -102,7 +102,7 @@ class PyTdeModelFixed(PyLoihiProcessModel):
         # m = (np.sign(trig_in_data) == self.sign) * (self.sign != 0)
         s_out_data = self.counter * equal_sign_idx
         # reset the counter
-        self.counter[equal_sign_idx] = 0.0
+        self.counter[equal_sign_idx] = 0
 
         # increase the counters that are started
         self.counter[self.counter > 0] += 1

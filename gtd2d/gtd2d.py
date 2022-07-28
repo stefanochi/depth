@@ -52,7 +52,10 @@ def setup_python(cfg):
     events, poses, calib, shape = load_data(cfg)
 
     chunk_size = cfg["chunk_size"]
-    print(chunk_size)
+    timesteps_second = cfg["timesteps_second"]
+    sequence_duration = events[-1, 0] - events[0, 0]
+    chunk_size = events.shape[0] / (timesteps_second * sequence_duration)
+    print("chunk size: ", chunk_size)
     runner = PythonRunner(events, poses, shape, chunk_size, calib, cfg)
 
     return runner
