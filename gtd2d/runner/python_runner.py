@@ -2,6 +2,7 @@ from .runner import Runner
 from . import flow_utils
 import numpy as np
 from tqdm import tqdm
+import scipy.sparse
 
 
 class PythonRunner(Runner):
@@ -27,9 +28,12 @@ class PythonRunner(Runner):
 
     def run(self):
         n_chunks = np.ceil(self.events.shape[0] / self.chunk_size).astype(int)
-        raw_depths = np.zeros((n_chunks, self.shape[0], self.shape[1]))
-        mean_depths = np.zeros((n_chunks, self.shape[0], self.shape[1]))
-        median_depths = np.zeros((n_chunks, self.shape[0], self.shape[1]))
+        #raw_depths = np.zeros((n_chunks, self.shape[0], self.shape[1]))
+        raw_depths = []
+        mean_depths = []
+        median_depths = []
+        #mean_depths = np.zeros((n_chunks, self.shape[0], self.shape[1]))
+        #median_depths = np.zeros((n_chunks, self.shape[0], self.shape[1]))
         flow_u = np.zeros((n_chunks, self.shape[0], self.shape[1]))
         flow_v = np.zeros((n_chunks, self.shape[0], self.shape[1]))
         cam_x = np.zeros((n_chunks, self.shape[0], self.shape[1]))
@@ -57,22 +61,28 @@ class PythonRunner(Runner):
             cam_y[i] = at[1]
 
             raw_depth = self.compute_depth(td, at)
-            raw_depths[i] = raw_depth
+            raw_depth[np.isnan(raw_depth)] = 0.0
+            raw_depths.append(scipy.sparse.csr_matrix(raw_depth))
             # the median and mean should be calculated with the data from the preceding time t
             # find the index of the raw depth corresponding to the lower bound
             idx = np.abs(times - (chunk_time - self.filter_time_dim)).argmin()
             # get the sum of the previous measured raw depth, and normalize by the number of measurements if there is
             # more than one
-            n_measurements = np.nansum(np.logical_and(raw_depths[idx:i + 1] != 0.0,
-                                                      ~np.isnan(raw_depths[idx:i + 1])), axis=0)
-            filter_data = np.divide(np.nansum(raw_depths[idx:i + 1], axis=0), n_measurements,
-                                    where=np.sum(raw_depths[idx:i + 1], axis=0) != np.nan)
+            depth_considered_sparse = raw_depths[idx:i + 1]
+            depth_considered = np.zeros((len(depth_considered_sparse), self.shape[0], self.shape[1]))
+            for i, d in enumerate(depth_considered_sparse):
+                depth_considered[i] = d.toarray()
+            depth_considered[depth_considered == 0.0] = np.nan
+            n_measurements = np.nansum(np.logical_and(depth_considered != 0.0,
+                                                      ~np.isnan(depth_considered)), axis=0)
+            filter_data = np.divide(np.nansum(depth_considered, axis=0), n_measurements,
+                                    where=np.sum(depth_considered, axis=0) != np.nan)
             filter_data[filter_data == 0] = np.nan
             # apply both the median filter and the mean filter and add them to the resulting array
             median_filtered_depth = self.median_filter(filter_data, self.filter_size)
             mean_filtered_depth = self.mean_filter(filter_data, self.filter_size, self.mean_thresh)
-            mean_depths[i] = mean_filtered_depth
-            median_depths[i] = median_filtered_depth
+            mean_depths.append(scipy.sparse.csr_matrix(mean_filtered_depth))
+            median_depths.append(scipy.sparse.csr_matrix(median_filtered_depth))
 
         output = {
             "times": times,

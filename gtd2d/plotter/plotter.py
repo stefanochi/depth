@@ -34,7 +34,7 @@ class Plotter:
             self.raw_depths = self.raw_depths_sparse
             self.mean_depths = self.mean_depths_sparse
         else:
-            self.sparse = False
+            self.sparse = True
             self.raw_depths = self.raw_depths_sparse
             self.mean_depths = self.mean_depths_sparse
             self.median_depths = out["median_depths"]
@@ -50,11 +50,25 @@ class Plotter:
         self.subsampling = out["cfg"]["subsampling_factor"]
         self.path = base_path
         self.load_groundtruth()
+        try:
+            self.samples = out["samples"]
+            self.mean_debug = out["mean_debug"]
+        except Exception as e:
+            print("Debug was not enabled for this sequence")
 
     def load_groundtruth(self):
         self.gt_depths = np.load(self.path + "gt_depths.npy")
         gt_times = np.genfromtxt(self.path + "depthmaps.txt", dtype="str")
         self.gt_times = gt_times[:, 0].astype(np.float64)
+
+    def get_gt_frame(self, time):
+        """
+        get the depthmap closes to the time given
+        :param time: given time
+        :return: depthmap at that time (closest)
+        """
+        idx = np.searchsorted(self.gt_times, time)
+        return self.gt_depths[idx]
 
     def get_frame(self, result_type, start, end=None):
         """
@@ -80,7 +94,7 @@ class Plotter:
             end = start + 1
 
         if self.sparse and result_type != "gt":
-            depths = [s.toarray() for s in depths[start:end]]
+            depths = np.array([s.toarray() for s in depths[start:end]])
         else:
             depths = depths[start:end]
 
@@ -89,7 +103,6 @@ class Plotter:
             np.logical_and(
                 depths != np.nan,
                 depths != 0), axis=0)
-
         normalized_meas = np.divide(depths_sum, n_measurements, where=depths_sum != 0.0, out=np.zeros_like(depths_sum))
         return normalized_meas
 
@@ -199,7 +212,7 @@ class Plotter:
         proj = proj.transpose()
         return proj
 
-    def gen_world_pointcloud(self, result_type, v_range):
+    def gen_world_pointcloud(self, result_type, v_range, id_range=None):
         """
         Generate the point-cloud in world coordinates
         :param result_type: either "raw" or "mean"
@@ -216,6 +229,9 @@ class Plotter:
             times = self.gt_times
         else:
             raise Exception("Only mean and raw implemented")
+
+        if id_range is not None:
+            depths = depths[id_range[0]:id_range[1]]
 
         projected_points = np.zeros((1, 4))
         ps = []
@@ -261,19 +277,33 @@ class Plotter:
 
         return pcd
 
-    def plot_open3d(self, result_type, z=2, v_range=None):
-        points = self.gen_world_pointcloud(result_type, v_range)
+    def plot_open3d(self, result_type, z=2, v_range=None, id_range=None):
+        points = self.gen_world_pointcloud(result_type, v_range=v_range, id_range=id_range)
         points_o3d = self.points_to_open3d_pointcloud(points[:, :3], z=z)
         o3d.visualization.draw_geometries([points_o3d])
 
-    def plot_open3d_gt(self, result_type, z=2, v_range=None):
-        points = self.gen_world_pointcloud(result_type, v_range)
+    def plot_open3d_gt(self, result_type, z=2, v_range=None, id_range=None):
+        points = self.gen_world_pointcloud(result_type, v_range=v_range, id_range=id_range)
         points_o3d = self.points_to_open3d_pointcloud(points[:, :3], z=z)
 
-        points_gt = self.gen_world_pointcloud("gt", v_range)
+        # find the corresponding id range for the gt depthmaps
+        if id_range is not None:
+            start_time = self.times[id_range[0]]+1
+            end_time = self.times[id_range[1]]
+            gt_range = (np.searchsorted(self.gt_times, start_time), np.searchsorted(self.gt_times, end_time))
+        else:
+            gt_range = None
+
+        points_gt = self.gen_world_pointcloud("gt", v_range=v_range, id_range=gt_range)
         points_gt_o3d = self.points_to_open3d_pointcloud(points_gt[:, :3], z=z, cmap="gray")
 
         o3d.visualization.draw_geometries([points_o3d, points_gt_o3d])
+
+    def plot_open3d_gt_only(self, z=2, v_range=None, id_range=None):
+        points_gt = self.gen_world_pointcloud("gt", v_range=v_range, id_range=id_range)
+        points_gt_o3d = self.points_to_open3d_pointcloud(points_gt[:, :3], z=z, cmap="gray")
+
+        o3d.visualization.draw_geometries([points_gt_o3d])
 
     def measure_errors(self, result_type, sum_range=25):
         """

@@ -38,6 +38,7 @@ class LavaRunner(Runner):
         self.avg_min_meas = cfg["avg_min_meas"]
         self.avg_alpha = cfg["avg_alpha"]
         self.floating = cfg["lava_floating"]
+        self.debug = cfg["debug_output"]
 
         self.input_buffer = self.gen_input_data(self.events, self.shape, self.timesteps)
         self.vel_input_buffer = self.gen_cam_input_data(self.events, self.cam_poses, self.timesteps)
@@ -107,8 +108,8 @@ class LavaRunner(Runner):
         raw_depth_sink = EventsSink(shape=out_shape)
         mean_depth_sink = EventsSink(shape=out_shape)
         # DEBUG
-        # debug_output = SinkBuffer(shape=out_shape, buffer=self.timesteps)
-        # avg_debug_output = SinkBuffer(shape=out_shape, buffer=self.timesteps)
+        debug_output = EventsSink(shape=out_shape)
+        avg_debug_output = EventsSink(shape=out_shape)
 
         input_n.s_out.connect(semd.s_in)
         input_cam.s_out.connect(cam_input.s_in)
@@ -126,8 +127,8 @@ class LavaRunner(Runner):
         cam_input.x_out.connect(semd.tu_in)
         cam_input.y_out.connect(semd.tv_in)
         # DEBUG
-        # semd.debug_out.connect(debug_output.a_in)
-        # semd.avg_debug.connect(avg_debug_output.a_in)
+        semd.debug_out.connect(debug_output.a_in)
+        semd.avg_debug.connect(avg_debug_output.a_in)
         print("total steps: {}".format(self.timesteps))
 
         rcnd = RunSteps(num_steps=1)
@@ -142,6 +143,8 @@ class LavaRunner(Runner):
         mean_depth_sparse = []
         u_sparse = []
         v_sparse = []
+        samples_sparse = []
+        mean_debug_sparse = []
 
         for t in tqdm(range(int(self.timesteps))):
             semd.run(condition=rcnd, run_cfg=rcfg)
@@ -156,6 +159,14 @@ class LavaRunner(Runner):
 
             sparse_matrix_u = scipy.sparse.csr_matrix(data_u) * step_t
             sparse_matrix_v = scipy.sparse.csr_matrix(data_v) * step_t
+
+            if self.debug:
+                data_samples_debug = debug_output.events_data.get()
+                data_mean_debug = avg_debug_output.events_data.get()
+                sparse_samples_debug = scipy.sparse.csr_matrix(data_samples_debug) * step_t
+                sparse_mean_debug = scipy.sparse.csr_matrix(data_mean_debug) * step_t
+                samples_sparse.append(sparse_samples_debug)
+                mean_debug_sparse.append(sparse_mean_debug)
 
             raw_depth_sparse.append(sparse_matrix_raw)
             mean_depth_sparse.append(sparse_matrix_mean)
@@ -177,7 +188,9 @@ class LavaRunner(Runner):
             "flow_u": u_sparse,
             "flow_v": v_sparse,
             "cam_x": cam_x_data,
-            "cam_y": cam_y_data
+            "cam_y": cam_y_data,
+            "samples": samples_sparse,
+            "mean_debug": mean_debug_sparse
         }
 
         return output
