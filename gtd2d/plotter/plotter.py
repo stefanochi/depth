@@ -56,6 +56,11 @@ class Plotter:
         except Exception as e:
             print("Debug was not enabled for this sequence")
 
+        try:
+            self.imu_vel = out["imu_data"]
+        except Exception as e:
+            print("imu data not present")
+
     def load_groundtruth(self):
         self.gt_depths = np.load(self.path + "gt_depths.npy")
         gt_times = np.genfromtxt(self.path + "depthmaps.txt", dtype="str")
@@ -232,6 +237,7 @@ class Plotter:
 
         if id_range is not None:
             depths = depths[id_range[0]:id_range[1]]
+            times = times[id_range[0]:id_range[1]]
 
         projected_points = np.zeros((1, 4))
         ps = []
@@ -293,7 +299,7 @@ class Plotter:
             gt_range = (np.searchsorted(self.gt_times, start_time), np.searchsorted(self.gt_times, end_time))
         else:
             gt_range = None
-
+        print(gt_range)
         points_gt = self.gen_world_pointcloud("gt", v_range=v_range, id_range=gt_range)
         points_gt_o3d = self.points_to_open3d_pointcloud(points_gt[:, :3], z=z, cmap="gray")
 
@@ -342,9 +348,9 @@ class Plotter:
             errors.append(diff)
 
             diff_rel[np.isclose(diff_rel, 0.0)] = np.nan
-            rel_err.append(diff_rel)
+            rel_err.append(diff_rel * 100)
 
-        return np.array(errors)
+        return np.array(errors), np.array(rel_err)
 
     def get_all_values(self, result_type, range=None):
         """

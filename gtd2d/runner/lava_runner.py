@@ -22,7 +22,7 @@ from semd.proc.events_sink.process import EventsSink
 
 
 class LavaRunner(Runner):
-    def __init__(self, events, cam_poses, shape, camera_calib, timesteps, cfg):
+    def __init__(self, events, cam_poses, shape, camera_calib, timesteps, imu_data, cfg):
         self.events = events
         self.cam_poses = cam_poses
         self.shape = tuple(shape)
@@ -39,9 +39,12 @@ class LavaRunner(Runner):
         self.avg_alpha = cfg["avg_alpha"]
         self.floating = cfg["lava_floating"]
         self.debug = cfg["debug_output"]
+        self.imu = cfg["use_imu"]
+        self.imu_data = imu_data
 
         self.input_buffer = self.gen_input_data(self.events, self.shape, self.timesteps)
-        self.vel_input_buffer = self.gen_cam_input_data(self.events, self.cam_poses, self.timesteps)
+        self.vel_data = self.imu_data if self.imu else self.cam_poses
+        self.vel_input_buffer = self.gen_cam_input_data(self.events, self.vel_data, self.timesteps)
         return
 
     def gen_input_data(self, events, shape, timesteps):
@@ -64,7 +67,7 @@ class LavaRunner(Runner):
             events_buffer[y, x, time] = pol
         return events_buffer
 
-    def gen_cam_input_data(self, events, poses, timesteps):
+    def gen_cam_input_data(self, events, data, timesteps):
 
         t_start = events[0, 0]
         duration = events[-1, 0] - events[0, 0]
@@ -74,7 +77,7 @@ class LavaRunner(Runner):
         for i in range(timesteps):
             curr_time = t_start + (duration / timesteps) * i
 
-            vel = flow_utils.vel_at_time(poses, curr_time)
+            vel = flow_utils.vel_at_time(data, curr_time, self.imu)
             velocities_buffer[:, i] = vel[1:4]
 
         return velocities_buffer
@@ -190,7 +193,8 @@ class LavaRunner(Runner):
             "cam_x": cam_x_data,
             "cam_y": cam_y_data,
             "samples": samples_sparse,
-            "mean_debug": mean_debug_sparse
+            "mean_debug": mean_debug_sparse,
+            "imu_data": self.imu
         }
 
         return output

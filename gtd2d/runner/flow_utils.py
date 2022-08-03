@@ -9,7 +9,7 @@ def get_translational_flow(t, f, C, shape):
         for y in range(u_flow.shape[0]):
             # shift coordinates to be centered
             xi = x - C[0]
-            yi = np.abs(y - u_flow.shape[0] +1) - C[1]
+            yi = np.abs(y - u_flow.shape[0] + 1) - C[1]
 
             # compute image flow
             m = np.array([
@@ -31,7 +31,7 @@ def get_angular_flow(w, f, C, shape):
         for y in range(u_flow.shape[0]):
             # center
             xi = x - C[0]
-            yi = np.abs(y - u_flow.shape[0] +1) - C[1]
+            yi = np.abs(y - u_flow.shape[0] + 1) - C[1]
 
             m = np.array([
                 [(xi * yi) / f, -(xi ** 2) / f - f, yi],
@@ -45,7 +45,20 @@ def get_angular_flow(w, f, C, shape):
     return u_flow, v_flow
 
 
-def vel_at_time(poses, time):
+def vel_at_time(data, time, imu=False):
+    if imu:
+        return vel_at_time_imu(data, time)
+    else:
+        return vel_at_time_gt(data, time)
+
+
+def vel_at_time_imu(data, time):
+    idx = np.searchsorted(data[:, 0], time)
+    imu_data = data[idx]
+    return imu_data
+
+
+def vel_at_time_gt(poses, time):
     """Get the camera velocity at the specified time"""
     idx = np.searchsorted(poses[:, 0], time)
     if idx != 0:

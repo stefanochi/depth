@@ -9,7 +9,7 @@ class PythonRunner(Runner):
     """Parameters for the execution:
         y"""
 
-    def __init__(self, events, cam_poses, shape, chunk_size, camera_calib, cfg):
+    def __init__(self, events, cam_poses, shape, chunk_size, camera_calib, imu_vel, cfg):
         # TODO move to cfg file
         self.events = events
         self.cam_poses = cam_poses
@@ -24,6 +24,12 @@ class PythonRunner(Runner):
         self.filter_size = cfg["avg_shape"][0]
         self.mean_thresh = cfg["avg_thresh"]
         self.filter_time_dim = 0.05
+        self.imu = cfg["use_imu"]
+        self.imu_vel = imu_vel
+        if self.imu:
+            self.vel_data = imu_vel
+        else:
+            self.vel_data = cam_poses
         return
 
     def run(self):
@@ -52,7 +58,7 @@ class PythonRunner(Runner):
             flow_u[i] = td[0]
             flow_v[i] = td[1]
 
-            cam_vel = flow_utils.vel_at_time(self.cam_poses, chunk_time)
+            cam_vel = flow_utils.vel_at_time(self.vel_data, chunk_time, self.imu)
             at = flow_utils.get_translational_flow(cam_vel[1:4],
                                                    self.camera_calib[0],
                                                    [self.camera_calib[2], self.camera_calib[3]],
@@ -95,7 +101,8 @@ class PythonRunner(Runner):
             "cam_poses": self.cam_poses,
             "cam_calib": self.camera_calib,
             "cam_x": cam_x,
-            "cam_y": cam_y
+            "cam_y": cam_y,
+            "imu_data": self.imu_vel
         }
         print("average chunk duration: {}".format(
             (self.events[-1, 0] - self.events[0, 0]) / n_chunks))
