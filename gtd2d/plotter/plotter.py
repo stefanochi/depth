@@ -111,6 +111,36 @@ class Plotter:
         normalized_meas = np.divide(depths_sum, n_measurements, where=depths_sum != 0.0, out=np.zeros_like(depths_sum))
         return normalized_meas
 
+    def get_frames(self, result_type, start, end=None):
+        """
+        Returns a frame of the results in the specified ids range.
+        The range can be either a single id or a range defined by start and end.
+        The result has to be normalized by the number of measurements for each point. Important for
+        longer ranges of frames
+        :param result_type: either raw, mean or median
+        :param start: the starting id
+        :param end: the end id (optional)
+        :return: a matrix representing the frame
+        """
+        if result_type == "raw":
+            depths = self.raw_depths
+        elif result_type == "mean":
+            depths = self.mean_depths
+        elif result_type == "gt":
+            depths = self.gt_depths
+        else:
+            raise Exception("Only mean and raw implemented")
+
+        if end is None:
+            end = start + 1
+
+        if self.sparse and result_type != "gt":
+            depths = np.array([s.toarray() for s in depths[start:end]])
+        else:
+            depths = depths[start:end]
+
+        return depths
+
     def get_frame_flow(self, start, end=None):
         """
         Returns a frame of the results in the specified ids range.
@@ -294,7 +324,7 @@ class Plotter:
 
         # find the corresponding id range for the gt depthmaps
         if id_range is not None:
-            start_time = self.times[id_range[0]]+1
+            start_time = self.times[id_range[0]] + 1
             end_time = self.times[id_range[1]]
             gt_range = (np.searchsorted(self.gt_times, start_time), np.searchsorted(self.gt_times, end_time))
         else:
@@ -335,20 +365,25 @@ class Plotter:
             idx = np.searchsorted(times, float(t))
             s_id = max(0, idx - sum_range)
             e_id = min(len(depths), idx + sum_range)
-            m_depth = self.get_frame(result_type, start=s_id, end=e_id)
+            m_depths = self.get_frames(result_type, start=s_id, end=e_id)
 
             gt_d = self.gt_depths[i, ::subsampling, ::subsampling]
+            diff_b = np.zeros_like(m_depths)
+            diff_rel_b = np.zeros_like(m_depths)
+            for i, m_depth in enumerate(m_depths):
+                diff_r = np.subtract(m_depth, gt_d, where=m_depth != 0.0, out=np.zeros_like(m_depth))
+                diff = np.abs(diff_r)
 
-            diff_r = np.subtract(m_depth, gt_d, where=m_depth != 0.0, out=np.zeros_like(m_depth))
-            diff = np.abs(diff_r)
+                diff_rel = np.divide(diff, gt_d, where=diff != 0.0, out=np.zeros_like(diff))
 
-            diff_rel = np.divide(diff, gt_d, where=diff != 0.0, out=np.zeros_like(diff))
+                diff[np.isclose(diff, 0.0)] = np.nan
+                diff_rel[np.isclose(diff_rel, 0.0)] = np.nan
 
-            diff[np.isclose(diff, 0.0)] = np.nan
-            errors.append(diff)
+                diff_b[i] = diff
+                diff_rel_b[i] = diff_rel
 
-            diff_rel[np.isclose(diff_rel, 0.0)] = np.nan
-            rel_err.append(diff_rel * 100)
+            errors.append(np.nanmean(diff_b, axis=0))
+            rel_err.append(np.nanmean(diff_rel_b, axis=0) * 100)
 
         return np.array(errors), np.array(rel_err)
 
