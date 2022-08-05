@@ -176,8 +176,8 @@ class LavaRunner(Runner):
             u_sparse.append(sparse_matrix_u)
             v_sparse.append(sparse_matrix_v)
 
-        cam_x_data = cam_output_x.data.get()
-        cam_y_data = cam_output_y.data.get()
+        # cam_x_data = cam_output_x.data.get()
+        # cam_y_data = cam_output_y.data.get()
 
         input_n.stop()
 
@@ -190,8 +190,8 @@ class LavaRunner(Runner):
             "cfg": self.cfg,
             "flow_u": u_sparse,
             "flow_v": v_sparse,
-            "cam_x": cam_x_data,
-            "cam_y": cam_y_data,
+            # "cam_x": cam_x_data,
+            # "cam_y": cam_y_data,
             "samples": samples_sparse,
             "mean_debug": mean_debug_sparse,
             "imu_data": self.imu
