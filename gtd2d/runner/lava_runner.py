@@ -42,7 +42,7 @@ class LavaRunner(Runner):
         self.imu = cfg["use_imu"]
         self.imu_data = imu_data
 
-        self.input_buffer = self.gen_input_data(self.events, self.shape, self.timesteps)
+        # self.input_buffer = self.gen_input_data(self.events, self.shape, self.timesteps)
         self.vel_data = self.imu_data if self.imu else self.cam_poses
         self.vel_input_buffer = self.gen_cam_input_data(self.events, self.vel_data, self.timesteps)
         return
@@ -66,6 +66,30 @@ class LavaRunner(Runner):
 
             events_buffer[y, x, time] = pol
         return events_buffer
+
+    def input_frame_step(self, events, shape, timestep):
+        timesteps_seconds = self.cfg["timesteps_second"]
+        seq_t_start = events[0, 0]
+
+        frame_t_start = seq_t_start + timestep * (1.0 / timesteps_seconds)
+        frame_t_end = frame_t_start + (1.0 / timesteps_seconds)
+
+        events_id_start = np.searchsorted(events[:, 0], frame_t_start)
+        events_id_end = np.searchsorted(events[:, 0], frame_t_end)
+
+        event_frame = np.zeros((shape[0], shape[1], 1))
+        for e in events[events_id_start:events_id_end]:
+            x = int(e[1])
+            y = int(e[2])
+
+            pol = 0
+            if e[3] == 1:
+                pol = 1
+            if e[3] == 0:
+                pol = -1
+
+            event_frame[y, x] = pol
+        return event_frame
 
     def gen_cam_input_data(self, events, data, timesteps):
 
@@ -99,7 +123,8 @@ class LavaRunner(Runner):
 
         out_shape = semd.out_shape
 
-        input_n = RingBuffer(self.input_buffer)
+        input_n = RingBuffer(self.input_frame_step(self.events, self.shape, 0))
+        # input_n = RingBuffer(self.input_buffer)
         input_cam = FloatInput(self.vel_input_buffer)
 
         output_u = EventsSink(shape=out_shape)
@@ -175,6 +200,8 @@ class LavaRunner(Runner):
             mean_depth_sparse.append(sparse_matrix_mean)
             u_sparse.append(sparse_matrix_u)
             v_sparse.append(sparse_matrix_v)
+
+            input_n.data.set(self.input_frame_step(self.events, self.shape, t + 1))
 
         # cam_x_data = cam_output_x.data.get()
         # cam_y_data = cam_output_y.data.get()
