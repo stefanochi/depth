@@ -61,8 +61,7 @@ def vel_at_time_imu(data, time):
 def vel_at_time_gt(poses, time):
     """Get the camera velocity at the specified time"""
     idx = np.searchsorted(poses[:, 0], time)
-    if idx != 0:
-        idx += 1
+    idx = min(poses.shape[0]-2, idx)
 
     pose_start = poses[idx]
     pose_end = poses[idx + 1]
