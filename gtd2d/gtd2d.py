@@ -11,7 +11,13 @@ import time
 
 def load_data(cfg):
     events = np.loadtxt(cfg["events_path"])
-    poses = np.loadtxt(cfg["poses_path"])
+    groundtruth_available = True
+    try:
+        poses = np.loadtxt(cfg["poses_path"])
+    except Exception as e:
+        print("no groundtruth poses")
+        groundtruth_available = False
+        poses = [[0, 0, 0, 0, 0, 0, 0, 0]]
 
     if cfg["use_imu"]:
         no_imu = False
@@ -21,13 +27,19 @@ def load_data(cfg):
             print("no IMU file found. using the ground truth instead")
             cfg["use_imu"] = False
             no_imu = True
+            if no_imu and not groundtruth_available:
+                print("no position data available: exiting")
+                sys.exit(1)
 
         if not no_imu:
             dt = (imu[1:, 0] - imu[:-1, 0]).mean()
 
             a = 1
-            gt_txyz = poses[:, :4]
-            vel_xyz_gt = (gt_txyz[a:, 1:] - gt_txyz[:-a, 1:]) / (gt_txyz[a:, 0] - gt_txyz[:-a, 0])[:, None]
+            if groundtruth_available:
+                gt_txyz = poses[:, :4]
+                vel_xyz_gt = (gt_txyz[a:, 1:] - gt_txyz[:-a, 1:]) / (gt_txyz[a:, 0] - gt_txyz[:-a, 0])[:, None]
+            else:
+                vel_xyz_gt = np.array([[0, 0, 0]])
 
             imu_txyz = imu[:, :4]
             imu_txyz[:,3] -= 9.81

@@ -62,8 +62,12 @@ class Plotter:
             print("imu data not present")
 
     def load_groundtruth(self):
-        self.gt_depths = np.load(self.path + "gt_depths.npy")
-        gt_times = np.genfromtxt(self.path + "depthmaps.txt", dtype="str")
+        try:
+            self.gt_depths = np.load(self.path + "gt_depths.npy")
+            gt_times = np.genfromtxt(self.path + "depthmaps.txt", dtype="str")
+        except Exception as e:
+            print(e)
+            return
         self.gt_times = gt_times[:, 0].astype(np.float64)
 
     def get_gt_frame(self, time):
@@ -155,7 +159,7 @@ class Plotter:
 
         if end is None:
             end = start + 1
-        if self.sparse:
+        if self.output["cfg"]["use_lava"]:
             flow_u = np.array([s.toarray() for s in self.flow_u[start:end]])
             flow_v = np.array([s.toarray() for s in self.flow_v[start:end]])
         else:
@@ -404,6 +408,30 @@ class Plotter:
         val_list = []
         for s in depths:
             _, _, v = scipy.sparse.find(s)
+            val_list = val_list + v.tolist()
+        return np.array(val_list)
+
+    def get_all_values_patch(self, result_type, x, y, l, range=None):
+        """
+        Return a list with all the non-zero values. Can be used to plot the histogram, for example
+        :param result_type: either raw or mean
+        :return: list of all the values
+        """
+        if result_type == "raw":
+            depths = self.raw_depths_sparse
+        elif result_type == "mean":
+            depths = self.mean_depths_sparse
+        else:
+            raise Exception("Only mean and raw implemented")
+        if range is not None:
+            depths = depths[range[0]:range[1]]
+        val_list = []
+        x_l = np.max([0.0, x-l])
+        x_h = np.min([depths[0].shape[1], x+l+1])
+        y_l = np.max([0.0, y - l])
+        y_h = np.min([depths[0].shape[0], y + l + 1])
+        for s in depths:
+            _, _, v = scipy.sparse.find(s[y_l:y_h,x_l:x_h])
             val_list = val_list + v.tolist()
         return np.array(val_list)
 
