@@ -48,6 +48,13 @@ class LavaRunner(Runner):
         return
 
     def gen_input_data(self, events, shape, timesteps):
+        """
+        Convert the asynchronous event stream to a discretized input suitable for the RimgBuffer
+        :param events: array containing the events
+        :param shape: sensor shape hxw
+        :param timesteps: number of timesteps in which to divide the events
+        :return: buffer to be used with RingBuffer
+        """
         t_start = events[0, 0]
         duration = events[-1, 0] - events[0, 0]
 

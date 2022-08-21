@@ -280,6 +280,7 @@ class Plotter:
             points = self._image2pointcloud(d, v_range)
 
             idx = np.searchsorted(self.cam_poses[:, 0], times[i])
+            idx = min(self.cam_poses.shape[0]-1, idx)
             p0 = self.cam_poses[idx - 1]
             p1 = self.cam_poses[idx]
             y = (times[i] - p0[0]) / (p1[0] - p0[0])
@@ -362,10 +363,12 @@ class Plotter:
         times = self.times
         errors = []
         rel_err = []
+        times_err = []
 
         for i, t in enumerate(self.gt_times):
             if t > times[-1] or t < times[0]:
                 continue
+            times_err.append(t)
             idx = np.searchsorted(times, float(t))
             s_id = max(0, idx - sum_range)
             e_id = min(len(depths), idx + sum_range)
@@ -389,7 +392,7 @@ class Plotter:
             errors.append(np.nanmean(diff_b, axis=0))
             rel_err.append(np.nanmean(diff_rel_b, axis=0) * 100)
 
-        return np.array(errors), np.array(rel_err)
+        return np.array(errors), np.array(rel_err), np.array(times_err)
 
     def get_all_values(self, result_type, range=None):
         """
@@ -407,6 +410,7 @@ class Plotter:
             depths = depths[range[0]:range[1]]
         val_list = []
         for s in depths:
+            s = s[:, :]
             _, _, v = scipy.sparse.find(s)
             val_list = val_list + v.tolist()
         return np.array(val_list)
