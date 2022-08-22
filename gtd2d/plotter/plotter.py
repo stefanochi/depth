@@ -240,7 +240,6 @@ class Plotter:
             [r_m, t],
             [np.zeros((1, 3)), 1]
         ])
-
         tmp = points[:, 2]
         a = np.ones(points.shape[0]) / points[:, 2]
         points = np.c_[points[:, :2], np.ones(points.shape[0])]
@@ -278,7 +277,8 @@ class Plotter:
         p_init = self.cam_poses[0]
         for i, d in enumerate(tqdm(depths)):
             points = self._image2pointcloud(d, v_range)
-
+            if points.shape[0] == 0:
+                continue
             idx = np.searchsorted(self.cam_poses[:, 0], times[i])
             idx = min(self.cam_poses.shape[0]-1, idx)
             p0 = self.cam_poses[idx - 1]
