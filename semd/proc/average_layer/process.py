@@ -32,7 +32,7 @@ class AverageLayer(AbstractProcess):
         self.avg_debug = OutPort(shape=shape)
         # DEBUG
         self.mean_thr = Var(shape=(1,), init=mean_thr)
-        self.mean = Var(shape=shape, init=np.zeros(shape))
+        self.mean = Var(shape=shape, init=np.ones(shape) * (-1))
         self.samples = Var(shape=shape, init=np.zeros(shape))
         self.min_meas = Var(shape=(1,), init=min_meas)
         self.avg_alpha = Var(shape=(1,), init=avg_alpha)
@@ -65,9 +65,17 @@ class PyAverageLayerModelFloat(PyLoihiProcessModel):
         s_in_data = self.s_in.recv()
         n_in_data = self.n_in.recv()
 
-        # update the mean with the s_in values
+        # update the mean
+        # with the s_in values
         m = s_in_data != 0.0
-        self.mean[m] += self.avg_alpha * ((s_in_data[m] / n_in_data[m]) - self.mean[m])
+        mean_initialized = self.mean != -1.0
+        # update mean where initialized
+        to_update = np.logical_and(m, mean_initialized)
+        self.mean[to_update] += self.avg_alpha * ((s_in_data[to_update] / n_in_data[to_update]) - self.mean[to_update])
+        # initialize mean when not
+        to_initialize = np.logical_and(m, np.logical_not(mean_initialized))
+        self.mean[to_initialize] = (s_in_data[to_initialize] / n_in_data[to_initialize])
+
         self.samples[m] += n_in_data[m]
 
         # DEBUG
@@ -119,9 +127,21 @@ class PyAverageLayerModelFixed(PyLoihiProcessModel):
         # update the mean with the s_in values
         # TODO fix point division
         avg_input_idx = s_in_data != 0
-        self.mean[avg_input_idx] += np.right_shift(
-            (s_in_data[avg_input_idx] / n_in_data[avg_input_idx]).astype(np.int32) -
-            self.mean[avg_input_idx], self.alpha_shift)
+        mean_initialized = self.mean != -1
+        # update mean when initialized
+        to_update = np.logical_and(avg_input_idx, mean_initialized)
+        self.mean[to_update] += np.right_shift(
+            (s_in_data[to_update] / n_in_data[to_update]).astype(np.int32) -
+            self.mean[to_update], self.alpha_shift)
+
+        # self.mean[to_update] += 1 * np.sign(
+        #     (s_in_data[to_update] / n_in_data[to_update]).astype(np.int32) -
+        #     self.mean[to_update])
+
+        # initialize mean
+        to_initialize = np.logical_and(avg_input_idx, np.logical_not(mean_initialized))
+        self.mean[to_initialize] = (s_in_data[to_initialize] / n_in_data[to_initialize]).astype(np.int32)
+
         self.samples[avg_input_idx] += n_in_data[avg_input_idx]
 
         # DEBUG
@@ -134,6 +154,7 @@ class PyAverageLayerModelFixed(PyLoihiProcessModel):
         m_trig = np.logical_and(np.abs(self.mean - trig_in_data) < self.mean_thr, trig_in_data != 0)
 
         s_out_data = self.mean * (trig_in_data > 0)
+        # s_out_data = trig_in_data * m_trig
 
         self.avg_out.send(s_out_data)
         # DEBUG
