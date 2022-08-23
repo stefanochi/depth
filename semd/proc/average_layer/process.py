@@ -130,13 +130,13 @@ class PyAverageLayerModelFixed(PyLoihiProcessModel):
         mean_initialized = self.mean != -1
         # update mean when initialized
         to_update = np.logical_and(avg_input_idx, mean_initialized)
-        self.mean[to_update] += np.right_shift(
-            (s_in_data[to_update] / n_in_data[to_update]).astype(np.int32) -
-            self.mean[to_update], self.alpha_shift)
-
-        # self.mean[to_update] += 1 * np.sign(
+        # self.mean[to_update] += np.right_shift(
         #     (s_in_data[to_update] / n_in_data[to_update]).astype(np.int32) -
-        #     self.mean[to_update])
+        #     self.mean[to_update], self.alpha_shift)
+
+        self.mean[to_update] += 4 * np.sign(
+            (s_in_data[to_update] / n_in_data[to_update]).astype(np.int32) -
+            self.mean[to_update])
 
         # initialize mean
         to_initialize = np.logical_and(avg_input_idx, np.logical_not(mean_initialized))
