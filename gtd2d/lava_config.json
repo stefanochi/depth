@@ -1,28 +1,33 @@
 {
-    "use_lava" : true,
-    "lava_floating" : true,
+    "use_lava" : false,
+    "lava_floating" : false ,
 
-    "base_path" : "C:/Users/schiavaz/lava-nc/depth/data/esim_data/curvy/",
-    "events_path" : "C:/Users/schiavaz/lava-nc/depth/data/esim_data/curvy/events.txt",
-    "poses_path" : "C:/Users/schiavaz/lava-nc/depth/data/esim_data/curvy/groundtruth.txt",
-    "calib_path" : "C:/Users/schiavaz/lava-nc/depth/data/esim_data/curvy/calib.txt",
-    "output_path" : "C:/Users/schiavaz/lava-nc/depth/data/esim_data/curvy/results/result.pkl",
+    "base_path" : "C:/Users/schiavaz/lava-nc/depth/data/slider-depth/",
+    "events_path" : "C:/Users/schiavaz/lava-nc/depth/data/slider-depth/events.txt",
+    "poses_path" : "C:/Users/schiavaz/lava-nc/depth/data/slider-depth/groundtruth.txt",
+    "imu_path" : "C:/Users/schiavaz/lava-nc/depth/data/slider-depth/imu.txt",
+    "calib_path" : "C:/Users/schiavaz/lava-nc/depth/data/slider-depth/calib.txt",
+    "output_path" : "C:/Users/schiavaz/lava-nc/depth/data/slider-depth/results/result.pkl",
 
-    "shift_axes": true,
+    "shift_axes": false,
+    "use_imu": false,
 
     "dvs_shape" : [180, 240],
-    "time_range" : [2.5, 2.8],
-    "timesteps_second" : 200,
+    "time_range" : [1.0, 2.0],
+    "timesteps_second" : 100,
     "refractory_period" : 0.1,
 
     "subsampling_factor" : 1,
     "conv_stride" : [1, 1],
     "conv_shape" : [1, 1],
     "thresh_conv" : 0.5,
-    "avg_thresh" : 50,
-    "avg_shape" : [5, 5],
+    "avg_thresh" : 200,
+    "avg_shape" : [9, 9],
     "avg_min_meas" : 5,
-    "avg_alpha" : 0.25,
+    "avg_alpha" : 0.03125,
+    "dist" : 4,
 
-    "chunk_size": 5000
+    "chunk_size": 10000,
+
+    "debug_output": true
 }
