@@ -42,6 +42,7 @@ class Semd2dLayer(AbstractProcess):
         avg_min_meas = kwargs.pop("avg_min_meas", 5)
         avg_conv_shape = kwargs.pop("avg_conv_shape", (5, 5))
         avg_alpha = kwargs.pop("avg_alpha", 0.5)
+        dist = kwargs.pop("dist", 1)
 
         bias_weight = vth / conv_shape[0] * conv_shape[1] * thresh_conv
         # convolution layer with reshape proc
@@ -65,7 +66,7 @@ class Semd2dLayer(AbstractProcess):
         self.debug_out = OutPort(shape=self.out_shape)
         self.avg_debug = OutPort(shape=self.out_shape)
         # DEBUG
-        self.initialize_weights()
+        self.initialize_weights(dist=dist)
         #self.initialize_conv_weights(avg_conv_shape)
 
         self.counter = Var(shape=shape, init=0)
@@ -110,6 +111,7 @@ class Semd2dLayerModel(AbstractSubProcessModel):
         avg_min_meas = proc.init_args.get("avg_min_meas", 1)
         avg_alpha = proc.init_args.get("avg_alpha", 0.5)
         avg_conv_shape = proc.init_args.get("avg_conv_shape", (1, 1))
+        dist = proc.init_args.get("dist", 1)
 
         up_weights = proc.vars.up_weights.get()
         down_weights = proc.vars.down_weights.get()
@@ -129,31 +131,31 @@ class Semd2dLayerModel(AbstractSubProcessModel):
         self.conn_up = Conv(
             input_shape=shape_conv,
             weight=up_weights,
-            padding=1,
+            padding=dist,
             use_graded_spike=True
         )
         self.conn_down = Conv(
             input_shape=shape_conv,
             weight=down_weights,
-            padding=1,
+            padding=dist,
             use_graded_spike=True
         )
         self.conn_left = Conv(
             input_shape=shape_conv,
             weight=left_weights,
-            padding=1,
+            padding=dist,
             use_graded_spike=True
         )
         self.conn_right = Conv(
             input_shape=shape_conv,
             weight=right_weights,
-            padding=1,
+            padding=dist,
             use_graded_spike=True
         )
         self.conn_trig = Conv(
             input_shape=shape_conv,
             weight=trig_weights,
-            padding=1,
+            padding=dist,
             use_graded_spike=True
         )
         # connect to the conv layers
@@ -180,7 +182,7 @@ class Semd2dLayerModel(AbstractSubProcessModel):
         self.conn_td2avg = Conv(
             input_shape=shape_conv,
             weight=trig_weights,  # just a matrix with 1 in the middle and rest zero
-            padding=1,
+            padding=dist,
             use_graded_spike=True)
         self.td.d_out.reshape(shape_conv).connect(self.conn_td2avg.s_in)
         self.conn_td2avg.a_out.reshape(shape).connect(self.average_layer.trig_in)

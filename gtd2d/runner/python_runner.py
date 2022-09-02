@@ -25,6 +25,8 @@ class PythonRunner(Runner):
         self.mean_thresh = cfg["avg_thresh"]
         self.filter_time_dim = 0.05
         self.imu = cfg["use_imu"]
+        self.dist = cfg["dist"]
+        # self.camera_calib[0] /=
         self.imu_vel = imu_vel
         if self.imu:
             self.vel_data = imu_vel
@@ -54,7 +56,7 @@ class PythonRunner(Runner):
 
             # compute the time difference for all the elements in the chunk
             # the time surface is maintained between chunks
-            td = self.compute_td(events_chunk, self.shape)
+            td = self.compute_td(events_chunk, self.shape, dist=self.dist)
             flow_u[i] = td[0]
             flow_v[i] = td[1]
 

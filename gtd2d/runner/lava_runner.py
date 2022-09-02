@@ -41,6 +41,8 @@ class LavaRunner(Runner):
         self.debug = cfg["debug_output"]
         self.imu = cfg["use_imu"]
         self.imu_data = imu_data
+        self.dist = cfg["dist"]
+        self.camera_calib[0] /= self.dist
 
         # self.input_buffer = self.gen_input_data(self.events, self.shape, self.timesteps)
         self.vel_data = self.imu_data if self.imu else self.cam_poses
@@ -121,7 +123,8 @@ class LavaRunner(Runner):
                            thresh_conv=self.thresh_conv,
                            avg_thresh=self.avg_thresh,
                            avg_conv_shape=self.avg_shape,
-                           avg_alpha=self.avg_alpha)
+                           avg_alpha=self.avg_alpha,
+                           dist=self.dist)
 
         cam_input = CameraInputLayer(shape=self.shape,
                                      focal_length=self.camera_calib[0],
