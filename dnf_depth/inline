@@ -1,0 +1,1029 @@
+{
+ "cells": [
+  {
+   "cell_type": "code",
+   "execution_count": 1,
+   "id": "a996b5f3",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "import sys\n",
+    "sys.path.append(\"\\..\")\n",
+    "\n",
+    "from lava.proc.lif.process import LIF\n",
+    "from lava.lib.dnf.connect.connect import connect\n",
+    "from lava.lib.dnf.operations.operations import Weights\n",
+    "from lava.lib.dnf.kernels.kernels import MultiPeakKernel\n",
+    "from lava.lib.dnf.operations.operations import Convolution\n",
+    "from lava.lib.dnf.kernels.kernels import SelectiveKernel\n",
+    "from lava.proc.io.source import RingBuffer\n",
+    "\n",
+    "from lava.magma.core.run_configs import Loihi1SimCfg\n",
+    "from lava.magma.core.run_conditions import RunSteps\n",
+    "from lava.lib.dnf.inputs.gauss_pattern.process import GaussPattern\n",
+    "from lava.lib.dnf.inputs.rate_code_spike_gen.process import RateCodeSpikeGen\n",
+    "from lava.proc.monitor.process import Monitor\n",
+    "import scipy.sparse\n",
+    "\n",
+    "\n",
+    "import matplotlib.pyplot as plt\n",
+    "\n",
+    "import numpy as np"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 2,
+   "id": "7dd84452",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "k_size=8\n",
+    "old_shape = np.array([128, 128])\n",
+    "img_shape = (old_shape / k_size).astype(int)\n",
+    "depthsxmeter = 20\n",
+    "d_range = [0.0, 0.5]\n",
+    "\n",
+    "n_depths = int(d_range[1] - d_range[0]) * depthsxmeter\n",
+    "shape = (img_shape[0], img_shape[1], n_depths)\n",
+    "print(shape)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 3,
+   "id": "0265b72f",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "def subsamples(data, k_size):\n",
+    "    new_shape = (\n",
+    "        int(data.shape[0] / k_size),\n",
+    "        k_size,\n",
+    "        int(data.shape[1] / k_size),\n",
+    "        k_size)\n",
+    "    data_reshape = data.reshape(new_shape)\n",
+    "    \n",
+    "    return np.nanmean(data_reshape.swapaxes(1 , 2), axis=(-1, -2))"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 4,
+   "id": "7e907825",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "dnf = LIF(shape=shape, du=0.12, dv=0.5, vth=10)\n",
+    "\n",
+    "# kernel = SelectiveKernel(amp_exc=4.0,\n",
+    "#                          width_exc=20.0,\n",
+    "#                          global_inh=-3)\n",
+    "kernel = MultiPeakKernel(amp_exc=7,\n",
+    "                         width_exc=[2, 2, 5],\n",
+    "                         amp_inh=-125,\n",
+    "                         width_inh=[0.1, 0.1, 10])\n",
+    "connect(dnf.s_out, dnf.a_in, [Convolution(kernel)])\n",
+    "# connect(input_proc.s_out, dnf.a_in, [Weights(7)])"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 5,
+   "id": "ed6a1bdc",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "time_steps = 100\n",
+    "\n",
+    "# input_buffer = np.zeros((shape[0], shape[1], shape[2], time_steps))\n",
+    "# input_buffer[5, 5, 5, :] = 1\n",
+    "# print(input_buffer.shape)\n",
+    "\n",
+    "samples = np.load(\"samples_stripes.npy\", allow_pickle=True)\n",
+    "\n",
+    "samples_np = np.zeros((old_shape[0], old_shape[1], samples.size))\n",
+    "\n",
+    "for i, s in enumerate(samples):\n",
+    "    samples_np[:,:, i] = s.toarray()\n",
+    "    \n",
+    "input_buffer = np.zeros((shape[0], shape[1], shape[2], time_steps))\n",
+    "samp = samples_np[:,:, 1000:1100:1]\n",
+    "\n",
+    "for i in range(samp.shape[-1]):\n",
+    "    test = samp[:,:,i]\n",
+    "    test[test == 0] = np.nan\n",
+    "    \n",
+    "    test_sub = subsamples(test, k_size)\n",
+    "    \n",
+    "    data_s = scipy.sparse.csr_matrix(test_sub[:])\n",
+    "\n",
+    "    y, x, d = scipy.sparse.find(data_s)\n",
+    "    y = y[d<d_range[1]]\n",
+    "    x = x[d<d_range[1]]\n",
+    "    d = d[d<d_range[1]]\n",
+    "    d = (((d - d_range[0]) / (d_range[1] - d_range[0])) * n_depths).astype(int)\n",
+    "    input_buffer[y, x, d, i] = 1\n",
+    "\n",
+    "print(input_buffer.shape)\n",
+    "input_proc = RingBuffer(input_buffer)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 6,
+   "id": "1729077c",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "k_size=8\n",
+    "old_shape = np.array([128, 128])\n",
+    "img_shape = (old_shape / k_size).astype(int)\n",
+    "depthsxmeter = 20\n",
+    "d_range = [0.0, 0.5]\n",
+    "\n",
+    "n_depths = int((d_range[1] - d_range[0]) * depthsxmeter)\n",
+    "shape = (img_shape[0], img_shape[1], n_depths)\n",
+    "print(shape)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 7,
+   "id": "906814ca",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "def subsamples(data, k_size):\n",
+    "    new_shape = (\n",
+    "        int(data.shape[0] / k_size),\n",
+    "        k_size,\n",
+    "        int(data.shape[1] / k_size),\n",
+    "        k_size)\n",
+    "    data_reshape = data.reshape(new_shape)\n",
+    "    \n",
+    "    return np.nanmean(data_reshape.swapaxes(1 , 2), axis=(-1, -2))"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 8,
+   "id": "3782e66e",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "dnf = LIF(shape=shape, du=0.12, dv=0.5, vth=10)\n",
+    "\n",
+    "# kernel = SelectiveKernel(amp_exc=4.0,\n",
+    "#                          width_exc=20.0,\n",
+    "#                          global_inh=-3)\n",
+    "kernel = MultiPeakKernel(amp_exc=7,\n",
+    "                         width_exc=[2, 2, 5],\n",
+    "                         amp_inh=-125,\n",
+    "                         width_inh=[0.1, 0.1, 10])\n",
+    "connect(dnf.s_out, dnf.a_in, [Convolution(kernel)])\n",
+    "# connect(input_proc.s_out, dnf.a_in, [Weights(7)])"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 9,
+   "id": "8688f660",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "time_steps = 100\n",
+    "\n",
+    "# input_buffer = np.zeros((shape[0], shape[1], shape[2], time_steps))\n",
+    "# input_buffer[5, 5, 5, :] = 1\n",
+    "# print(input_buffer.shape)\n",
+    "\n",
+    "samples = np.load(\"samples_stripes.npy\", allow_pickle=True)\n",
+    "\n",
+    "samples_np = np.zeros((old_shape[0], old_shape[1], samples.size))\n",
+    "\n",
+    "for i, s in enumerate(samples):\n",
+    "    samples_np[:,:, i] = s.toarray()\n",
+    "    \n",
+    "input_buffer = np.zeros((shape[0], shape[1], shape[2], time_steps))\n",
+    "samp = samples_np[:,:, 1000:1100:1]\n",
+    "\n",
+    "for i in range(samp.shape[-1]):\n",
+    "    test = samp[:,:,i]\n",
+    "    test[test == 0] = np.nan\n",
+    "    \n",
+    "    test_sub = subsamples(test, k_size)\n",
+    "    \n",
+    "    data_s = scipy.sparse.csr_matrix(test_sub[:])\n",
+    "\n",
+    "    y, x, d = scipy.sparse.find(data_s)\n",
+    "    y = y[d<d_range[1]]\n",
+    "    x = x[d<d_range[1]]\n",
+    "    d = d[d<d_range[1]]\n",
+    "    d = (((d - d_range[0]) / (d_range[1] - d_range[0])) * n_depths).astype(int)\n",
+    "    input_buffer[y, x, d, i] = 1\n",
+    "\n",
+    "print(input_buffer.shape)\n",
+    "input_proc = RingBuffer(input_buffer)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 10,
+   "id": "c6cbb53d",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "connect(input_proc.s_out, dnf.a_in, [Weights(7)])"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 11,
+   "id": "d2e94dcb",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "\n",
+    "monitor = Monitor()\n",
+    "monitor.probe(dnf.s_out, time_steps)\n",
+    "\n",
+    "# monitor_v = Monitor()\n",
+    "# monitor_v.probe(dnf.v, time_steps)\n",
+    "\n",
+    "# monitor_u = Monitor()\n",
+    "# monitor_u.probe(dnf.u, time_steps)\n",
+    "\n",
+    "# Run the DNF\n",
+    "dnf.run(condition=RunSteps(num_steps=time_steps),\n",
+    "        run_cfg=Loihi1SimCfg(select_tag='floating_pt'))\n",
+    "\n",
+    "# Get probed data from monitor\n",
+    "probed_data = monitor.get_data()\n",
+    "# probed_data_v = monitor_v.get_data()\n",
+    "# probed_data_u = monitor_u.get_data()\n",
+    "\n",
+    "# Stop the execution after getting the monitor's data\n",
+    "dnf.stop()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 12,
+   "id": "fa8114a8",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "t = probed_data[dnf.name][dnf.s_out.name][80:100,:,:,:].sum(axis=(0))\n",
+    "print(t.shape)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 13,
+   "id": "1a5cc5f7",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# t = input_buffer[:, :, :, 80:100].sum(axis=-1)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 14,
+   "id": "d4ff0eeb",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "%matplotlib notebook\n",
+    "ax = plt.figure().add_subplot(projection='3d')\n",
+    "ax.voxels(t);"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 15,
+   "id": "95a4eda5",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "t = input_buffer[:, :, :, 80:100].sum(axis=-1)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 16,
+   "id": "081b8026",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "%matplotlib notebook\n",
+    "ax = plt.figure().add_subplot(projection='3d')\n",
+    "ax.voxels(t);"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 17,
+   "id": "4c701964",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "t = probed_data[dnf.name][dnf.s_out.name][80:100,:,:,:].sum(axis=(0))\n",
+    "print(t.shape)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 18,
+   "id": "991c7eba",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# t = input_buffer[:, :, :, 80:100].sum(axis=-1)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 19,
+   "id": "53dafdf8",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "%matplotlib notebook\n",
+    "ax = plt.figure().add_subplot(projection='3d')\n",
+    "ax.voxels(t);"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 20,
+   "id": "0eafaa7f",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "dnf = LIF(shape=shape, du=0.12, dv=0.5, vth=10)\n",
+    "\n",
+    "# kernel = SelectiveKernel(amp_exc=4.0,\n",
+    "#                          width_exc=20.0,\n",
+    "#                          global_inh=-3)\n",
+    "kernel = MultiPeakKernel(amp_exc=4,\n",
+    "                         width_exc=[2, 2, 8],\n",
+    "                         amp_inh=-15,\n",
+    "                         width_inh=[0.1, 0.1, 10])\n",
+    "connect(dnf.s_out, dnf.a_in, [Convolution(kernel)])\n",
+    "# connect(input_proc.s_out, dnf.a_in, [Weights(7)])"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 21,
+   "id": "17ff9e88",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "time_steps = 100\n",
+    "\n",
+    "# input_buffer = np.zeros((shape[0], shape[1], shape[2], time_steps))\n",
+    "# input_buffer[5, 5, 5, :] = 1\n",
+    "# print(input_buffer.shape)\n",
+    "\n",
+    "samples = np.load(\"samples_stripes.npy\", allow_pickle=True)\n",
+    "\n",
+    "samples_np = np.zeros((old_shape[0], old_shape[1], samples.size))\n",
+    "\n",
+    "for i, s in enumerate(samples):\n",
+    "    samples_np[:,:, i] = s.toarray()\n",
+    "    \n",
+    "input_buffer = np.zeros((shape[0], shape[1], shape[2], time_steps))\n",
+    "samp = samples_np[:,:, 1000:1100:1]\n",
+    "\n",
+    "for i in range(samp.shape[-1]):\n",
+    "    test = samp[:,:,i]\n",
+    "    test[test == 0] = np.nan\n",
+    "    \n",
+    "    test_sub = subsamples(test, k_size)\n",
+    "    \n",
+    "    data_s = scipy.sparse.csr_matrix(test_sub[:])\n",
+    "\n",
+    "    y, x, d = scipy.sparse.find(data_s)\n",
+    "    y = y[d<d_range[1]]\n",
+    "    x = x[d<d_range[1]]\n",
+    "    d = d[d<d_range[1]]\n",
+    "    d = (((d - d_range[0]) / (d_range[1] - d_range[0])) * n_depths).astype(int)\n",
+    "    input_buffer[y, x, d, i] = 1\n",
+    "\n",
+    "print(input_buffer.shape)\n",
+    "input_proc = RingBuffer(input_buffer)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 22,
+   "id": "e910f888",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "connect(input_proc.s_out, dnf.a_in, [Weights(7)])"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 23,
+   "id": "de2588cc",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "\n",
+    "monitor = Monitor()\n",
+    "monitor.probe(dnf.s_out, time_steps)\n",
+    "\n",
+    "# monitor_v = Monitor()\n",
+    "# monitor_v.probe(dnf.v, time_steps)\n",
+    "\n",
+    "# monitor_u = Monitor()\n",
+    "# monitor_u.probe(dnf.u, time_steps)\n",
+    "\n",
+    "# Run the DNF\n",
+    "dnf.run(condition=RunSteps(num_steps=time_steps),\n",
+    "        run_cfg=Loihi1SimCfg(select_tag='floating_pt'))\n",
+    "\n",
+    "# Get probed data from monitor\n",
+    "probed_data = monitor.get_data()\n",
+    "# probed_data_v = monitor_v.get_data()\n",
+    "# probed_data_u = monitor_u.get_data()\n",
+    "\n",
+    "# Stop the execution after getting the monitor's data\n",
+    "dnf.stop()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 24,
+   "id": "2d6c7ba1",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "t = probed_data[dnf.name][dnf.s_out.name][80:100,:,:,:].sum(axis=(0))\n",
+    "print(t.shape)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 25,
+   "id": "08f19a51",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# t = input_buffer[:, :, :, 80:100].sum(axis=-1)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 26,
+   "id": "44939892",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "%matplotlib notebook\n",
+    "ax = plt.figure().add_subplot(projection='3d')\n",
+    "ax.voxels(t);"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 27,
+   "id": "11eec928",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "v = np.zeros_like(t)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 28,
+   "id": "41c7a78d",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "for i in range(v.shape[-1]):\n",
+    "    v[:, :, i] = (i / n_depths) * (d_range[1] - d_range[0]) + d_range[0]"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 29,
+   "id": "01125598",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "test = t * v"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 30,
+   "id": "13c3c6f9",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "test.shape"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 31,
+   "id": "ce392b1e",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "%matplotlib inline\n",
+    "test[test == 0] = np.nan\n",
+    "m = plt.imshow(np.nanmean(test, axis=-1), interpolation=\"none\", cmap=\"jet_r\", vmax=2.5, vmin=0)\n",
+    "plt.colorbar(m)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 32,
+   "id": "85252dfb",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "%matplotlib inline\n",
+    "test[test == 0] = np.nan\n",
+    "m = plt.imshow(np.nanmean(test, axis=-1), interpolation=\"none\", cmap=\"jet_r\", vmax=0.5, vmin=0)\n",
+    "plt.colorbar(m)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 33,
+   "id": "b64c8e7b",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "%matplotlib inline\n",
+    "test[test == 0] = np.nan\n",
+    "m = plt.imshow(np.nanmean(test, axis=-1), interpolation=\"none\", cmap=\"jet_r\", vmax=d_range[1], vmin=d_range[0])\n",
+    "plt.colorbar(m)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 34,
+   "id": "29508c99",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "%matplotlib notebook\n",
+    "ax = plt.figure().add_subplot(projection='3d')\n",
+    "ax.voxels(t);"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 35,
+   "id": "e1841097",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "t = probed_data[dnf.name][dnf.s_out.name][0:100,:,:,:].sum(axis=(0))\n",
+    "print(t.shape)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 36,
+   "id": "25fa06e7",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# t = input_buffer[:, :, :, 80:100].sum(axis=-1)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 37,
+   "id": "568869e3",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "%matplotlib notebook\n",
+    "ax = plt.figure().add_subplot(projection='3d')\n",
+    "ax.voxels(t);"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 38,
+   "id": "ed731fae",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "v = np.zeros_like(t)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 39,
+   "id": "5ad81dbf",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "for i in range(v.shape[-1]):\n",
+    "    v[:, :, i] = (i / n_depths) * (d_range[1] - d_range[0]) + d_range[0]"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 40,
+   "id": "38d72bfa",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "test = t * v"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 41,
+   "id": "643bef46",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "test.shape"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 42,
+   "id": "d85d2ac6",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "%matplotlib inline\n",
+    "test[test == 0] = np.nan\n",
+    "m = plt.imshow(np.nanmean(test, axis=-1), interpolation=\"none\", cmap=\"jet_r\", vmax=d_range[1], vmin=d_range[0])\n",
+    "plt.colorbar(m)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 43,
+   "id": "c02280d8",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "t = probed_data[dnf.name][dnf.s_out.name][80:100,:,:,:].sum(axis=(0))\n",
+    "print(t.shape)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 44,
+   "id": "b38b3cd1",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# t = input_buffer[:, :, :, 80:100].sum(axis=-1)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 45,
+   "id": "7189ffc6",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "%matplotlib notebook\n",
+    "ax = plt.figure().add_subplot(projection='3d')\n",
+    "ax.voxels(t);"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 46,
+   "id": "e47d7a11",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "t = input_buffer[:, :, :, 80:100].sum(axis=-1)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 47,
+   "id": "a9f101b1",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "%matplotlib notebook\n",
+    "ax = plt.figure().add_subplot(projection='3d')\n",
+    "ax.voxels(t);"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 48,
+   "id": "5c20bc4c",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "input_buffer.shape"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 49,
+   "id": "7590577b",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "input_x = input_buffer[8, 8, :, :]"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 50,
+   "id": "a27e3b5f",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "input_x.shape"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 51,
+   "id": "cf37d14e",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "data_s = scipy.sparse.csr_matrix(input_x)\n",
+    "\n",
+    "t_in, v_in, _ = scipy.sparse.find(data_s)\n",
+    "\n",
+    "plt.figure(figsize=(20, 10))\n",
+    "plt.scatter(t_in, v_in)\n",
+    "# plt.axhline(20, c=\"red\")\n",
+    "plt.ylim([0, 300])"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 52,
+   "id": "8f1086d4",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "data_s = scipy.sparse.csr_matrix(input_x)\n",
+    "\n",
+    "t_in, v_in, _ = scipy.sparse.find(data_s)\n",
+    "\n",
+    "# plt.figure(figsize=(20, 10))\n",
+    "plt.scatter(t_in, v_in)\n",
+    "# plt.axhline(20, c=\"red\")\n",
+    "plt.ylim([0, 300])"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 53,
+   "id": "7d6667f6",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "data_s = scipy.sparse.csr_matrix(input_x)\n",
+    "\n",
+    "t_in, v_in, _ = scipy.sparse.find(data_s)\n",
+    "\n",
+    "# plt.figure(figsize=(20, 10))\n",
+    "plt.scatter(t_in, v_in)\n",
+    "# plt.axhline(20, c=\"red\")\n",
+    "# plt.ylim([0, 300])"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 54,
+   "id": "df002b7b",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "input_x = input_buffer[8, 8, :, :]"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 55,
+   "id": "e82dae81",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "data_s = scipy.sparse.csr_matrix(input_x)\n",
+    "\n",
+    "t_in, v_in, _ = scipy.sparse.find(data_s)\n",
+    "\n",
+    "# plt.figure(figsize=(20, 10))\n",
+    "plt.scatter(t_in, v_in)\n",
+    "# plt.axhline(20, c=\"red\")\n",
+    "# plt.ylim([0, 300])"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 56,
+   "id": "3a622672",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "t_in"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 57,
+   "id": "eac2b327",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "v_in"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 58,
+   "id": "3a2f37e3",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "input_x = input_buffer[8, 8, :, :]"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 59,
+   "id": "387b96f9",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "data_s = scipy.sparse.csr_matrix(input_x)\n",
+    "\n",
+    "t_in, v_in, _ = scipy.sparse.find(data_s)\n",
+    "\n",
+    "# plt.figure(figsize=(20, 10))\n",
+    "plt.scatter(t_in, v_in)\n",
+    "# plt.axhline(20, c=\"red\")\n",
+    "# plt.ylim([0, 300])"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 60,
+   "id": "4f1cdf11",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "data_s = scipy.sparse.csr_matrix(input_x.transpose())\n",
+    "\n",
+    "t_in, v_in, _ = scipy.sparse.find(data_s)\n",
+    "\n",
+    "# plt.figure(figsize=(20, 10))\n",
+    "plt.scatter(t_in, v_in)\n",
+    "# plt.axhline(20, c=\"red\")\n",
+    "# plt.ylim([0, 300])"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 61,
+   "id": "b385c1b3",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "t_in"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 62,
+   "id": "b49f5bd6",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "v_in"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 63,
+   "id": "c31609c7",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "data_s = scipy.sparse.csr_matrix(input_x.transpose())\n",
+    "\n",
+    "t_in, v_in, _ = scipy.sparse.find(data_s)\n",
+    "\n",
+    "plt.figure(figsize=(20, 10))\n",
+    "plt.scatter(t_in, v_in)\n",
+    "# plt.axhline(20, c=\"red\")\n",
+    "# plt.ylim([0, 300])"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 64,
+   "id": "a419bf12",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "data_s = scipy.sparse.csr_matrix(input_x.transpose())\n",
+    "\n",
+    "t_in, v_in, _ = scipy.sparse.find(data_s)\n",
+    "\n",
+    "plt.figure(figsize=(10, 10))\n",
+    "plt.scatter(t_in, v_in)\n",
+    "# plt.axhline(20, c=\"red\")\n",
+    "# plt.ylim([0, 300])"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 65,
+   "id": "f2db3792",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "data_s = scipy.sparse.csr_matrix(input_x.transpose())\n",
+    "\n",
+    "t_in, v_in, _ = scipy.sparse.find(data_s)\n",
+    "\n",
+    "plt.figure(figsize=(10, 10))\n",
+    "plt.scatter(t_in, v_in)\n",
+    "plt.legend(fontsize=20)\n",
+    "plt.xlabel(\"Time [s]\", fontsize=22, labelpad=20)\n",
+    "plt.ylabel(\"Depth [m]\", fontsize=22, labelpad=20)\n",
+    "plt.title(\"Depth Estimate over time\", fontsize=24, pad=20)\n",
+    "plt.xticks(fontsize=20);\n",
+    "plt.yticks(fontsize=20);\n",
+    "plt.ylim([0.0, 3])\n",
+    "# print(results.times[1226])\n",
+    "plt.grid(axis=\"y\")"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 66,
+   "id": "9cdc8597",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "data_s = scipy.sparse.csr_matrix(input_x.transpose())\n",
+    "\n",
+    "t_in, v_in, _ = scipy.sparse.find(data_s)\n",
+    "\n",
+    "plt.figure(figsize=(10, 10))\n",
+    "plt.scatter(t_in, v_in)\n",
+    "plt.legend(fontsize=20)\n",
+    "plt.xlabel(\"Time [s]\", fontsize=22, labelpad=20)\n",
+    "plt.ylabel(\"Depth [m]\", fontsize=22, labelpad=20)\n",
+    "plt.title(\"Depth Estimate over time\", fontsize=24, pad=20)\n",
+    "plt.xticks(fontsize=20);\n",
+    "plt.yticks(fontsize=20);\n",
+    "# plt.ylim([0.0, 3])\n",
+    "# print(results.times[1226])\n",
+    "plt.grid(axis=\"y\")"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 67,
+   "id": "63624bd0",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "data_s = scipy.sparse.csr_matrix(input_x.transpose())\n",
+    "\n",
+    "t_in, v_in, _ = scipy.sparse.find(data_s)\n",
+    "\n",
+    "plt.figure(figsize=(10, 5))\n",
+    "plt.scatter(t_in, v_in)\n",
+    "plt.legend(fontsize=20)\n",
+    "plt.xlabel(\"Time [s]\", fontsize=22, labelpad=20)\n",
+    "plt.ylabel(\"Depth [m]\", fontsize=22, labelpad=20)\n",
+    "plt.title(\"Depth Estimate over time\", fontsize=24, pad=20)\n",
+    "plt.xticks(fontsize=20);\n",
+    "plt.yticks(fontsize=20);\n",
+    "# plt.ylim([0.0, 3])\n",
+    "# print(results.times[1226])\n",
+    "plt.grid(axis=\"y\")"
+   ]
+  }
+ ],
+ "metadata": {},
+ "nbformat": 4,
+ "nbformat_minor": 5
+}

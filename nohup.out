@@ -1,0 +1,6 @@
+Traceback (most recent call last):
+  File "gtd2d/gtd2d.py", line 4, in <module>
+    from runner.lava_runner import LavaRunner
+  File "/mnt/c/Users/schiavaz/lava-nc/depth/gtd2d/runner/lava_runner.py", line 11, in <module>
+    from lava.proc.io.source import RingBuffer
+ModuleNotFoundError: No module named 'lava'

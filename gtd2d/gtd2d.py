@@ -42,7 +42,7 @@ def load_data(cfg):
                 vel_xyz_gt = np.array([[0, 0, 0]])
 
             imu_txyz = imu[:, :4]
-            imu_txyz[:,3] -= 9.81
+            # imu_txyz[:,3] -= 9.81
             initial_vel = vel_xyz_gt[0]
             imu_xyz_init = np.vstack([initial_vel, imu_txyz[:, 1:] * dt])
             vel_xyz_imu = np.cumsum(imu_xyz_init, axis=0)
@@ -67,7 +67,7 @@ def load_data(cfg):
     print("sub factor: {}".format(sub_factor))
     # DEBUG
     #events = events[events[:, 3] == 0]
-    if sub_factor != 1:
+    if sub_factor != 0:
         events, shape = filter.filter_conv(events, shape, factor=sub_factor)
         calib = calib / sub_factor
 

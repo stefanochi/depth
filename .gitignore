@@ -4,4 +4,4 @@ __pycache__/
 tum-vie/
 tum-vie-3d/
 MVSEC/
-*.json
+*.npy

@@ -76,4 +76,4 @@ def vel_at_time_gt(poses, time):
     ang2 = R.from_quat(pose_end[4:]).as_euler("xyz")
     a_vel = (ang2 - ang1) / (pose_end[0] - pose_start[0])
 
-    return np.array([time, t_vel[0], t_vel[1], t_vel[2], a_vel[0], a_vel[1], a_vel[2]])
+    return np.array([time, -t_vel[0], -t_vel[1], t_vel[2], a_vel[0], a_vel[1], a_vel[2]])

@@ -28,7 +28,11 @@ class Plotter:
         self.times = out["times"]
         # convert sparse to result to dense matrices
         self.raw_depths_sparse = out["raw_depths"]
-        self.mean_depths_sparse = out["mean_depths"]
+        try:
+            self.mean_depths_sparse = out["mean_depths"]
+        except Exception as e:
+            print("no mean depth")
+            self.mean_depths_sparse = None
         if out["cfg"]["use_lava"]:
             self.sparse = True
             self.raw_depths = self.raw_depths_sparse
@@ -37,7 +41,11 @@ class Plotter:
             self.sparse = True
             self.raw_depths = self.raw_depths_sparse
             self.mean_depths = self.mean_depths_sparse
-            self.median_depths = out["median_depths"]
+            try:
+                self.median_depths = out["median_depths"]
+            except Exception as e:
+                print("no median depth")
+                self.median_depths = None
         try:
             self.flow_u = out["flow_u"]
             self.flow_v = out["flow_v"]
@@ -46,6 +54,11 @@ class Plotter:
 
         self.cam_poses = out["cam_poses"]
         self.cam_calib = out["cam_calib"]
+        try:
+            if out["cfg"]["dist"] != 1:
+                self.cam_calib[0] *= out["cfg"]["dist"]
+        except Exception as e:
+            print("Dist is not defined, default is 1")
         self.shape = out["cfg"]["dvs_shape"]
         self.subsampling = out["cfg"]["subsampling_factor"]
         self.path = base_path
@@ -96,6 +109,8 @@ class Plotter:
             depths = self.mean_depths
         elif result_type == "gt":
             depths = self.gt_depths
+        elif result_type == "median":
+            depths = self.median_depths
         else:
             raise Exception("Only mean and raw implemented")
 
@@ -130,6 +145,8 @@ class Plotter:
             depths = self.raw_depths
         elif result_type == "mean":
             depths = self.mean_depths
+        elif result_type == "median":
+            depths = self.median_depths
         elif result_type == "gt":
             depths = self.gt_depths
         else:
@@ -262,6 +279,9 @@ class Plotter:
         elif result_type == "mean":
             depths = self.mean_depths_sparse
             times = self.times
+        elif result_type == "median":
+            depths = self.median_depths
+            times = self.times
         elif result_type == "gt":
             depths = self.gt_depths
             times = self.gt_times
@@ -318,10 +338,11 @@ class Plotter:
 
         return pcd
 
-    def plot_open3d(self, result_type, z=2, v_range=None, id_range=None):
+    def plot_open3d(self, result_type, z=2, v_range=None, id_range=None, cmap="jet"):
         points = self.gen_world_pointcloud(result_type, v_range=v_range, id_range=id_range)
-        points_o3d = self.points_to_open3d_pointcloud(points[:, :3], z=z)
+        points_o3d = self.points_to_open3d_pointcloud(points[:, :3], z=z, cmap=cmap)
         o3d.visualization.draw_geometries([points_o3d])
+        return points_o3d
 
     def plot_open3d_gt(self, result_type, z=2, v_range=None, id_range=None):
         points = self.gen_world_pointcloud(result_type, v_range=v_range, id_range=id_range)
@@ -357,6 +378,8 @@ class Plotter:
             depths = self.raw_depths
         elif result_type == "mean":
             depths = self.mean_depths
+        elif result_type == "median":
+            depths = self.median_depths
         else:
             raise Exception("Only mean and raw implemented")
         subsampling = self.subsampling
@@ -404,8 +427,10 @@ class Plotter:
             depths = self.raw_depths_sparse
         elif result_type == "mean":
             depths = self.mean_depths_sparse
+        elif result_type == "median":
+            depths = self.median_depths
         else:
-            raise Exception("Only mean and raw implemented")
+            raise Exception("Only mean, median and raw implemented")
         if range is not None:
             depths = depths[range[0]:range[1]]
         val_list = []

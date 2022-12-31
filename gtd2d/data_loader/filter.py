@@ -42,7 +42,10 @@ def filter_conv(events, shape, factor=5, thresh=1.0 / 2.0):
         x = int(e[1] / conv_stride[0])
         y = int(e[2] / conv_stride[1])
 
-        conv_acc[y, x] += 1 if e[3] == 1 else -1
+        if e[3] == 1:
+            conv_acc[y, x] += 1
+        else:
+            conv_acc[y, x] -= 1
 
         if np.abs(conv_acc[y, x]) >= conv_shape[0] * conv_shape[1] * thresh:
             event_conv.append([e[0], x, y, e[3]])
