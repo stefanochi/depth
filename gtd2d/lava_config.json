@@ -2,12 +2,12 @@
     "use_lava" : false,
     "lava_floating" : false ,
 
-    "base_path" : "C:/Users/schiavaz/lava-nc/depth/data/shapes/",
-    "events_path" : "C:/Users/schiavaz/lava-nc/depth/data/shapes/events.txt",
-    "poses_path" : "C:/Users/schiavaz/lava-nc/depth/data/shapes/groundtruth2.txt",
-    "imu_path" : "C:/Users/schiavaz/lava-nc/depth/data/shapes/imu.txt",
-    "calib_path" : "C:/Users/schiavaz/lava-nc/depth/data/shapes/calib.txt",
-    "output_path" : "C:/Users/schiavaz/lava-nc/depth/data/shapes/results/result.pkl",
+    "base_path" : "/home/chistefano/neuromorphic/lava-nc/depth/data/slider_depth/",
+    "events_path" : "/home/chistefano/neuromorphic/lava-nc/depth/data/slider_depth/events.txt",
+    "poses_path" : "/home/chistefano/neuromorphic/lava-nc/depth/data/slider_depth/groundtruth.txt",
+    "imu_path" : "/home/chistefano/neuromorphic/lava-nc/depth/data/slider_depth/imu.txt",
+    "calib_path" : "/home/chistefano/neuromorphic/lava-nc/depth/data/slider_depth/calib.txt",
+    "output_path" : "/home/chistefano/neuromorphic/lava-nc/depth/data/slider_depth/results/result.pkl",
 
     "shift_axes": false,
     "use_imu": false,
@@ -24,8 +24,8 @@
     "avg_thresh" : 200,
     "avg_shape" : [5, 5],
     "avg_min_meas" : 5,
-    "avg_alpha" : 0.0625,
-    "dist" : 1,
+    "avg_alpha" : 0.03125,
+    "dist" : 2,
 
     "chunk_size": 10000,
 

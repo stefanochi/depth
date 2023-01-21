@@ -71,10 +71,16 @@ class PythonRunner(Runner):
             cam_x[i] = at[0] #+ bw[0]
             cam_y[i] = at[1] #+ bw[1]
 
-            raw_depth = self.compute_depth(td, at)
-            # raw_depth = raw_depth / (1 - (td[0]*bw[0] + td[1]*bw[1]))
+            wt = flow_utils.get_angular_flow(cam_vel[4:],
+                                            self.camera_calib[0],
+                                            [self.camera_calib[2], self.camera_calib[3]],
+                                            self.shape)
 
-            raw_depth[np.isnan(raw_depth)] = 0
+            raw_depth = self.compute_depth(td, at)
+            raw_depth = raw_depth / (1 - wt[0]*td[0] + wt[1]*td[1])
+
+
+            raw_depth[np.isnan(raw_depth)] = 0.0
             raw_depths.append(scipy.sparse.csr_matrix(raw_depth))
             # the median and mean should be calculated with the data from the preceding time t
             # find the index of the raw depth corresponding to the lower bound
